@@ -33,12 +33,13 @@ function mapPartFromBackend(backend: any): Part {
 }
 
 // Frontend formatını backend formatına çevir
+// Backend'de description field'ı yok - sadece name, unitPrice, stock gönderilmeli
 function mapPartToBackend(part: CreatePartRequest | UpdatePartRequest): any {
   return {
     name: part.name,
     unitPrice: part.unitPrice,
     stock: part.stockLevel,
-    description: part.description,
+    // description field'ı backend'de yok, gönderilmiyor
   }
 }
 

@@ -34,17 +34,22 @@ export interface UpdateFaultStatusRequest {
 }
 
 // Backend durum formatını frontend formatına çevir
+// API dokümantasyonuna göre: OPEN, COMPLETED
+// Backend'den OPEN/COMPLETED gelebilir veya Türkçe gelebilir (backend enum mapping var)
 function mapFaultStatusFromBackend(backendStatus: string): 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' {
-  if (backendStatus === 'TAMAMLANDI') return 'COMPLETED'
-  if (backendStatus === 'ACIK') return 'OPEN'
+  if (backendStatus === 'COMPLETED' || backendStatus === 'TAMAMLANDI') return 'COMPLETED'
+  if (backendStatus === 'OPEN' || backendStatus === 'ACIK') return 'OPEN'
   return 'OPEN' // Default
 }
 
 // Frontend durum formatını backend formatına çevir
+// API dokümantasyonuna göre: OPEN, COMPLETED gönderilmeli (backend enum mapping var ama direkt İngilizce gönder)
+// Bu fonksiyon artık kullanılmıyor - direkt status gönderiliyor
 function mapFaultStatusToBackend(status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED'): string {
-  if (status === 'COMPLETED') return 'TAMAMLANDI'
-  if (status === 'OPEN' || status === 'IN_PROGRESS') return 'ACIK'
-  return 'ACIK'
+  // API dokümantasyonuna göre direkt İngilizce gönder
+  if (status === 'COMPLETED') return 'COMPLETED'
+  if (status === 'OPEN' || status === 'IN_PROGRESS') return 'OPEN'
+  return 'OPEN'
 }
 
 // Backend'den gelen formatı frontend formatına çevir
@@ -90,18 +95,18 @@ export const faultService = {
   },
 
   getOpen: async (): Promise<Fault[]> => {
-    // Backend: status=ACIK veya boş (tüm açık olanlar)
+    // API dokümantasyonuna göre: status=OPEN (backend enum mapping var ama direkt İngilizce gönder)
     const { data } = await apiClient.get<ApiResponse<any[]>>('/faults', {
-      params: { status: 'ACIK' }
+      params: { status: 'OPEN' }
     })
     const unwrapped = unwrapArrayResponse(data)
     return unwrapped.map(mapFaultFromBackend).filter(f => f.durum === 'OPEN' || f.durum === 'IN_PROGRESS')
   },
 
   getCompleted: async (): Promise<Fault[]> => {
-    // Backend: status=TAMAMLANDI
+    // API dokümantasyonuna göre: status=COMPLETED
     const { data } = await apiClient.get<ApiResponse<any[]>>('/faults', {
-      params: { status: 'TAMAMLANDI' }
+      params: { status: 'COMPLETED' }
     })
     const unwrapped = unwrapArrayResponse(data)
     return unwrapped.map(mapFaultFromBackend).filter(f => f.durum === 'COMPLETED')
@@ -121,10 +126,13 @@ export const faultService = {
   },
 
   updateStatus: async (id: number, status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED'): Promise<Fault> => {
-    // Backend: Query parameter ?status=TAMAMLANDI veya ?status=ACIK
+    // API dokümantasyonuna göre: PUT /api/faults/{id}/status
+    // Request body: { "status": "COMPLETED" } veya { "status": "OPEN" }
     // IN_PROGRESS durumu backend'de yok, OPEN olarak gönderilecek
-    const backendStatus = mapFaultStatusToBackend(status === 'IN_PROGRESS' ? 'OPEN' : status)
-    const { data } = await apiClient.put<ApiResponse<any>>(`/faults/${id}/status?status=${backendStatus}`)
+    const backendStatus = status === 'IN_PROGRESS' ? 'OPEN' : status
+    const { data } = await apiClient.put<ApiResponse<any>>(`/faults/${id}/status`, {
+      status: backendStatus
+    })
     const unwrapped = unwrapResponse(data)
     return mapFaultFromBackend(unwrapped)
   },

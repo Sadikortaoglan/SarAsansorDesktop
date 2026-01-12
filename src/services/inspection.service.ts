@@ -30,19 +30,23 @@ export interface CreateInspectionRequest {
 }
 
 // Backend sonuc formatını frontend formatına çevir
+// API dokümantasyonuna göre: PASSED, FAILED, PENDING
+// Backend'den PASSED/FAILED/PENDING gelebilir veya Türkçe gelebilir (backend enum mapping var)
 function mapInspectionResultFromBackend(backendResult: string): 'PASS' | 'FAIL' | 'PENDING' {
-  if (backendResult === 'BAŞARILI') return 'PASS'
-  if (backendResult === 'BAŞARISIZ') return 'FAIL'
-  if (backendResult === 'BEKLENİYOR') return 'PENDING'
+  if (backendResult === 'PASSED' || backendResult === 'BAŞARILI') return 'PASS'
+  if (backendResult === 'FAILED' || backendResult === 'BAŞARISIZ') return 'FAIL'
+  if (backendResult === 'PENDING' || backendResult === 'BEKLENİYOR') return 'PENDING'
   return 'PENDING' // Default
 }
 
 // Frontend sonuc formatını backend formatına çevir
+// API dokümantasyonuna göre: PASSED, FAILED, PENDING gönderilmeli (backend enum mapping var ama direkt İngilizce gönder)
 function mapInspectionResultToBackend(result: 'PASS' | 'FAIL' | 'PENDING'): string {
-  if (result === 'PASS') return 'BAŞARILI'
-  if (result === 'FAIL') return 'BAŞARISIZ'
-  if (result === 'PENDING') return 'BEKLENİYOR'
-  return 'BEKLENİYOR'
+  // API dokümantasyonuna göre direkt İngilizce gönder
+  if (result === 'PASS') return 'PASSED'
+  if (result === 'FAIL') return 'FAILED'
+  if (result === 'PENDING') return 'PENDING'
+  return 'PENDING'
 }
 
 // Backend'den gelen formatı frontend formatına çevir

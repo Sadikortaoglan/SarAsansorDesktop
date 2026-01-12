@@ -4,8 +4,8 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 // import.meta.env.DEV yerine daha güvenilir kontrol
 const isDevelopment = import.meta.env.MODE === 'development' || import.meta.env.DEV
 const API_BASE_URL = isDevelopment 
-  ? '/api'  // Vite proxy kullan - http://localhost:5173/api -> http://localhost:8081/api
-  : import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081/api'  // Production URL
+  ? '/api'  // Vite proxy kullan - http://localhost:5173/api -> http://localhost:8080/api
+  : import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'  // Production URL
 
 console.log('🔵 API Configuration:', {
   mode: import.meta.env.MODE,
@@ -71,14 +71,14 @@ apiClient.interceptors.request.use(
         tokenPreview: token.substring(0, 20) + '...',
       })
     } else {
-      console.warn('⚠️ No token found for request:', {
+      // Token yoksa isteği iptal et ve login sayfasına yönlendir
+      console.error('❌ No token found - Request blocked:', {
         url: config.url,
         method: config.method,
       })
-      // Token yoksa header'ı temizle (403 hatası önlemek için)
-      if (config.headers) {
-        delete config.headers.Authorization
-      }
+      tokenStorage.clearTokens()
+      // Promise reject et - istek gönderilmesin
+      return Promise.reject(new Error('Authentication required. Please login.'))
     }
     
     // Detailed request logging
@@ -205,6 +205,7 @@ apiClient.interceptors.response.use(
         const response = await axios.post(refreshUrl, { refreshToken }, {
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
           },
         })
         
