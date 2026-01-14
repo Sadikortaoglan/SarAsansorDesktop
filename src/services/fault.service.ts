@@ -45,12 +45,6 @@ function mapFaultStatusFromBackend(backendStatus: string): 'OPEN' | 'IN_PROGRESS
 // Frontend durum formatını backend formatına çevir
 // API dokümantasyonuna göre: OPEN, COMPLETED gönderilmeli (backend enum mapping var ama direkt İngilizce gönder)
 // Bu fonksiyon artık kullanılmıyor - direkt status gönderiliyor
-function mapFaultStatusToBackend(status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED'): string {
-  // API dokümantasyonuna göre direkt İngilizce gönder
-  if (status === 'COMPLETED') return 'COMPLETED'
-  if (status === 'OPEN' || status === 'IN_PROGRESS') return 'OPEN'
-  return 'OPEN'
-}
 
 // Backend'den gelen formatı frontend formatına çevir
 // YENİ BACKEND FIELD İSİMLERİ (eski field'lar KULLANILMIYOR):
