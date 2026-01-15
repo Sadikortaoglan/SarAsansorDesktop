@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { offerService, type Offer } from '@/services/offer.service'
 import { partService } from '@/services/part.service'
 import { Button } from '@/components/ui/button'
+import { TableResponsive } from '@/components/ui/table-responsive'
 import {
   Table,
   TableBody,
@@ -91,16 +92,91 @@ export function OffersPage() {
     }
   }
 
+  const columns = [
+    {
+      key: 'id',
+      header: 'Teklif No',
+      mobileLabel: 'Teklif No',
+      mobilePriority: 10,
+      render: (offer: Offer) => <span className="font-medium">#{offer.id}</span>,
+    },
+    {
+      key: 'customerName',
+      header: 'Müşteri',
+      mobileLabel: 'Müşteri',
+      mobilePriority: 9,
+      render: (offer: Offer) => offer.customerName,
+    },
+    {
+      key: 'offerDate',
+      header: 'Teklif Tarihi',
+      mobileLabel: 'Teklif Tarihi',
+      mobilePriority: 6,
+      render: (offer: Offer) => formatDateShort(offer.offerDate),
+    },
+    {
+      key: 'validUntil',
+      header: 'Geçerlilik',
+      mobileLabel: 'Geçerlilik',
+      mobilePriority: 5,
+      render: (offer: Offer) => formatDateShort(offer.validUntil),
+    },
+    {
+      key: 'totalAmount',
+      header: 'Toplam Tutar',
+      mobileLabel: 'Toplam Tutar',
+      mobilePriority: 8,
+      render: (offer: Offer) => <span className="font-medium">{formatCurrency(offer.totalAmount)}</span>,
+    },
+    {
+      key: 'actions',
+      header: 'İşlemler',
+      mobileLabel: '',
+      mobilePriority: 7,
+      hideOnMobile: false,
+      render: (offer: Offer) => (
+        <div className="flex items-center justify-end gap-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Detay">
+                <Eye className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <OfferDetailDialog offer={offer} />
+          </Dialog>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => handleExportPdf(offer.id)}
+            aria-label="İndir"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => handleDelete(offer.id)}
+            aria-label="Sil"
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Teklifler</h1>
-          <p className="text-muted-foreground">Tüm tekliflerin listesi</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Teklifler</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">Tüm tekliflerin listesi</p>
         </div>
         <Dialog>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Yeni Teklif Oluştur
             </Button>
@@ -120,65 +196,12 @@ export function OffersPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Teklif No</TableHead>
-                <TableHead>Müşteri</TableHead>
-                <TableHead>Teklif Tarihi</TableHead>
-                <TableHead>Geçerlilik</TableHead>
-                <TableHead>Toplam Tutar</TableHead>
-                <TableHead className="text-right">İşlemler</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {offersArray.length > 0 ? (
-                offersArray.map((offer) => (
-                  <TableRow key={offer.id}>
-                    <TableCell className="font-medium">#{offer.id}</TableCell>
-                    <TableCell>{offer.customerName}</TableCell>
-                    <TableCell>{formatDateShort(offer.offerDate)}</TableCell>
-                    <TableCell>{formatDateShort(offer.validUntil)}</TableCell>
-                    <TableCell className="font-medium">{formatCurrency(offer.totalAmount)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <OfferDetailDialog offer={offer} />
-                        </Dialog>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleExportPdf(offer.id)}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(offer.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    Teklif bulunamadı
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <TableResponsive
+          data={offersArray}
+          columns={columns}
+          keyExtractor={(offer) => offer.id}
+          emptyMessage="Teklif bulunamadı"
+        />
       )}
     </div>
   )
@@ -264,14 +287,14 @@ function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
   )
 
   return (
-    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-h-[85vh]">
       <DialogHeader>
         <DialogTitle>Yeni Teklif Oluştur</DialogTitle>
         <DialogDescription>Teklif bilgilerini ve kalemlerini girin</DialogDescription>
       </DialogHeader>
       <form onSubmit={handleSubmit}>
         <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="customerName">Müşteri Adı *</Label>
               <Input
@@ -311,7 +334,7 @@ function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
 
           <div className="border-t pt-4">
             <Label className="text-lg font-semibold">Kalemler</Label>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex flex-col sm:flex-row gap-2">
               <Select value={selectedPartId} onValueChange={setSelectedPartId}>
                 <SelectTrigger className="flex-1">
                   <SelectValue placeholder="Parça seçin" />
@@ -326,13 +349,14 @@ function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
               </Select>
               <Input
                 type="number"
+                inputMode="numeric"
                 placeholder="Miktar"
                 value={itemQuantity}
                 onChange={(e) => setItemQuantity(Number(e.target.value))}
-                className="w-24"
+                className="w-full sm:w-24"
                 min="1"
               />
-              <Button type="button" onClick={handleAddItem}>
+              <Button type="button" onClick={handleAddItem} className="w-full sm:w-auto">
                 Ekle
               </Button>
             </div>
@@ -384,8 +408,8 @@ function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
             )}
           </div>
         </div>
-        <DialogFooter>
-          <Button type="submit" disabled={createMutation.isPending}>
+        <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+          <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto">
             Oluştur
           </Button>
         </DialogFooter>
@@ -401,24 +425,24 @@ function OfferDetailDialog({ offer }: { offer: Offer }) {
         <DialogTitle>Teklif Detayı #{offer.id}</DialogTitle>
         <DialogDescription>{offer.customerName}</DialogDescription>
       </DialogHeader>
-      <div className="space-y-4 py-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label className="text-muted-foreground">Müşteri</Label>
-            <p className="font-medium">{offer.customerName}</p>
+        <div className="space-y-4 py-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-muted-foreground">Müşteri</Label>
+              <p className="font-medium">{offer.customerName}</p>
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Telefon</Label>
+              <p className="font-medium">{offer.customerPhone || '-'}</p>
+            </div>
           </div>
-          <div>
-            <Label className="text-muted-foreground">Telefon</Label>
-            <p className="font-medium">{offer.customerPhone || '-'}</p>
-          </div>
-        </div>
         {offer.customerAddress && (
           <div>
             <Label className="text-muted-foreground">Adres</Label>
             <p className="font-medium">{offer.customerAddress}</p>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label className="text-muted-foreground">Teklif Tarihi</Label>
             <p className="font-medium">{formatDateShort(offer.offerDate)}</p>

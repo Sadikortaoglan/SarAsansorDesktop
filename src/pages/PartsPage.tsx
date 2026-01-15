@@ -3,14 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { partService, type Part } from '@/services/part.service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { TableResponsive } from '@/components/ui/table-responsive'
 import {
   Dialog,
   DialogContent,
@@ -70,16 +63,95 @@ export function PartsPage() {
     }
   }
 
+  const columns = [
+    {
+      key: 'name',
+      header: 'Parça Adı',
+      mobileLabel: 'Parça Adı',
+      mobilePriority: 10,
+      render: (part: Part) => <span className="font-medium">{part.name}</span>,
+    },
+    {
+      key: 'description',
+      header: 'Açıklama',
+      mobileLabel: 'Açıklama',
+      mobilePriority: 5,
+      render: (part: Part) => part.description || '-',
+    },
+    {
+      key: 'stockLevel',
+      header: 'Stok Seviyesi',
+      mobileLabel: 'Stok',
+      mobilePriority: 8,
+      render: (part: Part) => (
+        <Badge variant={part.stockLevel < 10 ? 'destructive' : 'default'}>
+          {part.stockLevel}
+        </Badge>
+      ),
+    },
+    {
+      key: 'unitPrice',
+      header: 'Birim Fiyat',
+      mobileLabel: 'Birim Fiyat',
+      mobilePriority: 7,
+      render: (part: Part) => formatCurrency(part.unitPrice),
+    },
+    {
+      key: 'totalValue',
+      header: 'Toplam Değer',
+      mobileLabel: 'Toplam Değer',
+      mobilePriority: 6,
+      render: (part: Part) => formatCurrency(part.stockLevel * part.unitPrice),
+    },
+    {
+      key: 'actions',
+      header: 'İşlemler',
+      mobileLabel: '',
+      mobilePriority: 9,
+      hideOnMobile: false,
+      render: (part: Part) => (
+        <div className="flex items-center justify-end gap-2 lg:justify-end">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => {
+              setSelectedPart(part)
+              setIsDialogOpen(true)
+            }}
+            aria-label="Düzenle"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => handleDelete(part.id)}
+            aria-label="Sil"
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Stok / Parçalar</h1>
-          <p className="text-muted-foreground">Tüm parçaların ve stok seviyelerinin listesi</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Stok / Parçalar</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+            Tüm parçaların ve stok seviyelerinin listesi
+          </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => setSelectedPart(null)}>
+            <Button 
+              onClick={() => setSelectedPart(null)}
+              className="w-full sm:w-auto"
+            >
               <Plus className="mr-2 h-4 w-4" />
               Yeni Parça Ekle
             </Button>
@@ -114,64 +186,12 @@ export function PartsPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Parça Adı</TableHead>
-                <TableHead>Açıklama</TableHead>
-                <TableHead>Stok Seviyesi</TableHead>
-                <TableHead>Birim Fiyat</TableHead>
-                <TableHead>Toplam Değer</TableHead>
-                <TableHead className="text-right">İşlemler</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredParts && filteredParts.length > 0 ? (
-                filteredParts.map((part) => (
-                  <TableRow key={part.id}>
-                    <TableCell className="font-medium">{part.name}</TableCell>
-                    <TableCell>{part.description || '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant={part.stockLevel < 10 ? 'destructive' : 'default'}>
-                        {part.stockLevel}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatCurrency(part.unitPrice)}</TableCell>
-                    <TableCell>{formatCurrency(part.stockLevel * part.unitPrice)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setSelectedPart(part)
-                            setIsDialogOpen(true)
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(part.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    Parça bulunamadı
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <TableResponsive
+          data={filteredParts}
+          columns={columns}
+          keyExtractor={(part) => part.id}
+          emptyMessage="Parça bulunamadı"
+        />
       )}
     </div>
   )
@@ -245,7 +265,7 @@ function PartFormDialog({
   }
 
   return (
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-h-[85vh]">
       <DialogHeader>
         <DialogTitle>{part ? 'Parça Düzenle' : 'Yeni Parça Ekle'}</DialogTitle>
         <DialogDescription>
@@ -271,12 +291,13 @@ function PartFormDialog({
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="stockLevel">Stok Seviyesi *</Label>
               <Input
                 id="stockLevel"
                 type="number"
+                inputMode="numeric"
                 value={formData.stockLevel}
                 onChange={(e) => setFormData({ ...formData, stockLevel: Number(e.target.value) })}
                 required
@@ -287,6 +308,7 @@ function PartFormDialog({
               <Input
                 id="unitPrice"
                 type="number"
+                inputMode="decimal"
                 step="0.01"
                 value={formData.unitPrice}
                 onChange={(e) => setFormData({ ...formData, unitPrice: Number(e.target.value) })}
@@ -295,11 +317,11 @@ function PartFormDialog({
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
+        <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
             İptal
           </Button>
-          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="w-full sm:w-auto">
             {part ? 'Güncelle' : 'Ekle'}
           </Button>
         </DialogFooter>
