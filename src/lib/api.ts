@@ -90,18 +90,21 @@ apiClient.interceptors.response.use(
     return response
   },
   async (error: AxiosError) => {
-
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const statusCode = error.response?.status
+    const isAuthError = statusCode === 401 || statusCode === 403
+    const isAuthEndpoint = originalRequest?.url?.includes('/auth/login') || originalRequest?.url?.includes('/auth/refresh')
+
+    if (isAuthError && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
         })
           .then((token) => {
-            if (originalRequest.headers && token) {
+            if (originalRequest?.headers && token) {
               originalRequest.headers.Authorization = `Bearer ${token}`
             }
             return apiClient(originalRequest)
@@ -115,11 +118,15 @@ apiClient.interceptors.response.use(
       const refreshToken = tokenStorage.getRefreshToken()
       if (!refreshToken) {
         tokenStorage.clearTokens()
+        alert('Oturum süreniz doldu. Lütfen tekrar giriş yapın.')
         window.location.href = '/login'
+        isRefreshing = false
         return Promise.reject(error)
       }
 
       try {
+        console.log('🔄 REFRESH TOKEN TRIGGERED', { statusCode, url: originalRequest?.url })
+
         const refreshUrl = isDevelopment 
           ? '/api/auth/refresh'
           : `${API_BASE_URL}/auth/refresh`
@@ -152,9 +159,14 @@ apiClient.interceptors.response.use(
           throw new Error('Access token not received from refresh endpoint')
         }
         
+        if (!newRefreshToken) {
+          newRefreshToken = refreshToken
+        }
+        
         tokenStorage.setTokens(accessToken, newRefreshToken)
+        console.log('✅ REFRESH TOKEN SUCCESS')
 
-        if (originalRequest.headers) {
+        if (originalRequest?.headers) {
           const cleanToken = accessToken.trim().startsWith('Bearer ') 
             ? accessToken.trim().substring(7) 
             : accessToken.trim()
@@ -164,19 +176,22 @@ apiClient.interceptors.response.use(
         processQueue(null, accessToken)
         isRefreshing = false
         return apiClient(originalRequest)
-      } catch (refreshError) {
+      } catch (refreshError: any) {
+        console.error('❌ REFRESH TOKEN FAILED', refreshError)
         processQueue(refreshError as AxiosError, null)
-        tokenStorage.clearTokens()
-        window.location.href = '/login'
         isRefreshing = false
+        
+        const refreshStatusCode = refreshError?.response?.status || refreshError?.status || 0
+        
+        if (refreshStatusCode === 400 || refreshStatusCode === 401 || refreshStatusCode === 403 || !refreshToken) {
+          tokenStorage.clearTokens()
+          
+          alert('Oturum süreniz doldu. Lütfen tekrar giriş yapın.')
+          
+          window.location.href = '/login'
+        }
+        
         return Promise.reject(refreshError)
-      }
-    }
-
-    if (error.response?.status === 403) {
-      if (!tokenStorage.getAccessToken()) {
-        tokenStorage.clearTokens()
-        window.location.href = '/login'
       }
     }
 
