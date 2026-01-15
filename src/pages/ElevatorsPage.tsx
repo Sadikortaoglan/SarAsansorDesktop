@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { elevatorService, type Elevator } from '@/services/elevator.service'
@@ -22,6 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -32,16 +33,16 @@ export function ElevatorsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedElevator, setSelectedElevator] = useState<Elevator | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [elevatorToDelete, setElevatorToDelete] = useState<number | null>(null)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
-  const { data: elevators, isLoading, error } = useQuery({
+  const { data: elevators, isLoading } = useQuery({
     queryKey: ['elevators'],
     queryFn: () => elevatorService.getAll(),
   })
-
-  console.log('🔵 ElevatorsPage - elevators:', elevators, 'isLoading:', isLoading, 'error:', error)
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => elevatorService.delete(id),
@@ -62,7 +63,6 @@ export function ElevatorsPage() {
     },
   })
 
-  // Güvenli array kontrolü
   const elevatorsArray = Array.isArray(elevators) ? elevators : []
   const filteredElevators = elevatorsArray.filter(
     (elevator) =>
@@ -85,8 +85,14 @@ export function ElevatorsPage() {
   }
 
   const handleDelete = (id: number) => {
-    if (window.confirm('Bu asansörü silmek istediğinize emin misiniz?')) {
-      deleteMutation.mutate(id)
+    setElevatorToDelete(id)
+    setConfirmDeleteOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (elevatorToDelete !== null) {
+      deleteMutation.mutate(elevatorToDelete)
+      setElevatorToDelete(null)
     }
   }
 
@@ -150,7 +156,6 @@ export function ElevatorsPage() {
             <TableBody>
               {filteredElevators && filteredElevators.length > 0 ? (
                 filteredElevators.map((elevator) => {
-                  // Durum yoksa hesapla
                   if (!elevator.durum) {
                     const today = new Date()
                     const bitisTarihi = new Date(elevator.bitisTarihi)
@@ -184,9 +189,18 @@ export function ElevatorsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => {
-                            setSelectedElevator(elevator)
-                            setIsDialogOpen(true)
+                          onClick={async () => {
+                            try {
+                              const freshElevator = await elevatorService.getById(elevator.id)
+                              setSelectedElevator(freshElevator)
+                              setIsDialogOpen(true)
+                            } catch (error) {
+                              toast({
+                                title: 'Hata',
+                                description: 'Asansör bilgileri yüklenirken bir hata oluştu.',
+                                variant: 'destructive',
+                              })
+                            }
                           }}
                         >
                           <Edit className="h-4 w-4" />
@@ -214,6 +228,17 @@ export function ElevatorsPage() {
           </Table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Asansörü Sil"
+        message="Bu asansörü silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        confirmText="Evet, Sil"
+        cancelText="İptal"
+        onConfirm={confirmDelete}
+        variant="destructive"
+      />
     </div>
   )
 }
@@ -228,17 +253,39 @@ function ElevatorFormDialog({
   onSuccess: () => void
 }) {
   const [formData, setFormData] = useState({
-    kimlikNo: elevator?.kimlikNo || '',
-    bina: elevator?.bina || '',
-    adres: elevator?.adres || '',
-    durak: elevator?.durak || '',
-    maviEtiket: elevator?.maviEtiket || '',
-    maviEtiketTarihi: elevator?.maviEtiketTarihi
-      ? elevator.maviEtiketTarihi.split('T')[0]
-      : '',
+    kimlikNo: '',
+    bina: '',
+    adres: '',
+    durak: '',
+    maviEtiket: '',
+    maviEtiketTarihi: '',
   })
   const { toast } = useToast()
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (elevator) {
+      setFormData({
+        kimlikNo: elevator.kimlikNo || '',
+        bina: elevator.bina || '',
+        adres: elevator.adres || '',
+        durak: elevator.durak || '',
+        maviEtiket: elevator.maviEtiket || '',
+        maviEtiketTarihi: elevator.maviEtiketTarihi
+          ? elevator.maviEtiketTarihi.split('T')[0]
+          : '',
+      })
+    } else {
+      setFormData({
+        kimlikNo: '',
+        bina: '',
+        adres: '',
+        durak: '',
+        maviEtiket: '',
+        maviEtiketTarihi: '',
+      })
+    }
+  }, [elevator])
 
   const createMutation = useMutation({
     mutationFn: (data: typeof formData) => elevatorService.create(data),
@@ -249,6 +296,7 @@ function ElevatorFormDialog({
         description: 'Asansör başarıyla eklendi.',
         variant: 'success',
       })
+      onClose()
       onSuccess()
     },
     onError: () => {
@@ -272,6 +320,7 @@ function ElevatorFormDialog({
         description: 'Asansör başarıyla güncellendi.',
         variant: 'success',
       })
+      onClose()
       onSuccess()
     },
     onError: () => {

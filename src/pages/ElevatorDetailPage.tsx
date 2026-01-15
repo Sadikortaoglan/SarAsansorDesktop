@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
@@ -35,6 +36,8 @@ export function ElevatorDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [maintenanceToDelete, setMaintenanceToDelete] = useState<number | null>(null)
 
   const { data: elevator, isLoading } = useQuery({
     queryKey: ['elevator', id],
@@ -215,9 +218,8 @@ export function ElevatorDetailPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => {
-                              if (window.confirm('Bakım kaydını silmek istediğinize emin misiniz?')) {
-                                deleteMutation.mutate(maintenance.id)
-                              }
+                              setMaintenanceToDelete(maintenance.id)
+                              setConfirmDeleteOpen(true)
                             }}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
@@ -234,6 +236,22 @@ export function ElevatorDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Bakım Kaydını Sil"
+        message="Bu bakım kaydını silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        confirmText="Evet, Sil"
+        cancelText="İptal"
+        onConfirm={() => {
+          if (maintenanceToDelete !== null) {
+            deleteMutation.mutate(maintenanceToDelete)
+            setMaintenanceToDelete(null)
+          }
+        }}
+        variant="destructive"
+      />
     </div>
   )
 }

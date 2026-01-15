@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { userService, type User } from '@/services/user.service'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -36,16 +37,17 @@ import { Plus, Edit, Trash2 } from 'lucide-react'
 export function UsersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<number | null>(null)
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
   const { data: users, isLoading, error } = useQuery({
     queryKey: ['users'],
     queryFn: () => userService.getAll(),
-    retry: false, // Endpoint yoksa tekrar deneme
+    retry: false,
   })
 
-  // Güvenli array kontrolü
   const usersArray = Array.isArray(users) ? users : []
 
   const deleteMutation = useMutation({
@@ -68,8 +70,14 @@ export function UsersPage() {
   })
 
   const handleDelete = (id: number) => {
-    if (window.confirm('Bu kullanıcıyı silmek istediğinize emin misiniz?')) {
-      deleteMutation.mutate(id)
+    setUserToDelete(id)
+    setConfirmDeleteOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (userToDelete !== null) {
+      deleteMutation.mutate(userToDelete)
+      setUserToDelete(null)
     }
   }
 
@@ -170,6 +178,17 @@ export function UsersPage() {
           </Table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Kullanıcıyı Sil"
+        message="Bu kullanıcıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        confirmText="Evet, Sil"
+        cancelText="İptal"
+        onConfirm={confirmDelete}
+        variant="destructive"
+      />
     </div>
   )
 }
@@ -184,12 +203,30 @@ function UserFormDialog({
   onSuccess: () => void
 }) {
   const [formData, setFormData] = useState({
-    username: user?.username || '',
+    username: '',
     password: '',
-    role: (user?.role || 'PERSONEL') as 'PATRON' | 'PERSONEL',
-    enabled: user?.enabled ?? true,
+    role: 'PERSONEL' as 'PATRON' | 'PERSONEL',
+    enabled: true,
   })
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        username: user.username || '',
+        password: '',
+        role: user.role || 'PERSONEL',
+        enabled: user.enabled ?? true,
+      })
+    } else {
+      setFormData({
+        username: '',
+        password: '',
+        role: 'PERSONEL',
+        enabled: true,
+      })
+    }
+  }, [user])
 
   const createMutation = useMutation({
     mutationFn: (data: typeof formData) => userService.create(data),
@@ -199,6 +236,7 @@ function UserFormDialog({
         description: 'Kullanıcı başarıyla eklendi.',
         variant: 'success',
       })
+      onClose()
       onSuccess()
     },
     onError: () => {
@@ -221,6 +259,7 @@ function UserFormDialog({
         description: 'Kullanıcı başarıyla güncellendi.',
         variant: 'success',
       })
+      onClose()
       onSuccess()
     },
     onError: () => {

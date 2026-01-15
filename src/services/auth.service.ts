@@ -6,7 +6,6 @@ export interface LoginRequest {
   password: string
 }
 
-// Backend login response formatı: { success: true, data: { accessToken, refreshToken, userId, username, role } }
 export interface LoginResponseData {
   accessToken: string
   refreshToken: string
@@ -37,19 +36,14 @@ export interface RefreshTokenResponse {
 export const authService = {
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
     try {
-      console.log('🔵 Login request:', { url: '/auth/login', credentials: { ...credentials, password: '***' } })
       const response = await apiClient.post<ApiResponse<LoginResponseData>>('/auth/login', credentials, {
         headers: {
           'Content-Type': 'application/json',
         },
       })
-      console.log('✅ Login response FULL:', response)
-      console.log('✅ Login response.data:', response.data)
       
-      // Backend formatı: { success: true, data: { accessToken, refreshToken, userId, username, role } }
       const responseData = unwrapResponse(response.data)
       
-      // Frontend formatına dönüştür
       const loginResponse: LoginResponse = {
         accessToken: responseData.accessToken,
         refreshToken: responseData.refreshToken,
@@ -60,17 +54,8 @@ export const authService = {
         },
       }
       
-      console.log('✅ Login response parsed:', loginResponse)
       return loginResponse
     } catch (error: any) {
-      console.error('❌ Login error details:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        headers: error.response?.headers,
-        config: error.config,
-      })
       throw error
     }
   },
@@ -84,8 +69,6 @@ export const authService = {
   },
 
   logout: () => {
-    // Token'ları temizle, backend'e logout isteği göndermeye gerek yok
-    // Çünkü stateless JWT kullanıyoruz
   },
 }
 

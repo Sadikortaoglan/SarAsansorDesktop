@@ -102,11 +102,9 @@ export const paymentService = {
   getSummary: async (params?: { dateFrom?: string; dateTo?: string }): Promise<PaymentSummary | null> => {
     try {
       const { data } = await apiClient.get<ApiResponse<PaymentSummary>>('/payments/summary', { params })
-      return unwrapResponse(data, true) // Opsiyonel endpoint - hata durumunda null döndür
+      return unwrapResponse(data, true)
     } catch (error: any) {
-      // Backend'de endpoint yoksa null döndür
       if (error.response?.status === 404 || error.response?.data?.success === false) {
-        console.warn('Payments summary endpoint not available:', error.response?.data?.message)
         return null
       }
       throw error

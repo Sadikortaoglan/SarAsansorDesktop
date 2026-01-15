@@ -79,11 +79,9 @@ export const maintenanceService = {
     try {
       const params = month ? { month } : undefined
       const { data } = await apiClient.get<ApiResponse<MaintenanceSummary>>('/maintenances/summary', { params })
-      return unwrapResponse(data, true) // Opsiyonel endpoint - hata durumunda null döndür
+      return unwrapResponse(data, true)
     } catch (error: any) {
-      // Backend'de endpoint yoksa null döndür
       if (error.response?.status === 404 || error.response?.data?.success === false) {
-        console.warn('Maintenances summary endpoint not available:', error.response?.data?.message)
         return null
       }
       throw error

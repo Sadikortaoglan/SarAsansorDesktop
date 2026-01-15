@@ -116,7 +116,6 @@ export const elevatorService = {
       elevatorNumber: elevator.durak,
       inspectionDate: elevator.maviEtiketTarihi,
     }
-    // Opsiyonel field'lar: floorCount, capacity, speed eklenecekse buraya eklenebilir
     
     const { data } = await apiClient.post<ApiResponse<any>>('/elevators', backendRequest)
     const unwrapped = unwrapResponse(data)
@@ -124,13 +123,13 @@ export const elevatorService = {
   },
 
   update: async (id: number, elevator: UpdateElevatorRequest): Promise<Elevator> => {
-    // Yeni backend field isimleri: identityNumber, buildingName, address, elevatorNumber, inspectionDate
     const backendRequest: any = {}
-    if (elevator.kimlikNo) backendRequest.identityNumber = elevator.kimlikNo
-    if (elevator.bina) backendRequest.buildingName = elevator.bina
-    if (elevator.adres) backendRequest.address = elevator.adres
-    if (elevator.durak) backendRequest.elevatorNumber = elevator.durak
-    if (elevator.maviEtiketTarihi) backendRequest.inspectionDate = elevator.maviEtiketTarihi
+    if (elevator.kimlikNo !== undefined) backendRequest.identityNumber = elevator.kimlikNo
+    if (elevator.bina !== undefined) backendRequest.buildingName = elevator.bina
+    if (elevator.adres !== undefined) backendRequest.address = elevator.adres
+    if (elevator.durak !== undefined) backendRequest.elevatorNumber = elevator.durak
+    if (elevator.maviEtiket !== undefined) backendRequest.maviEtiket = elevator.maviEtiket
+    if (elevator.maviEtiketTarihi !== undefined) backendRequest.inspectionDate = elevator.maviEtiketTarihi
     
     const { data } = await apiClient.put<ApiResponse<any>>(`/elevators/${id}`, backendRequest)
     const unwrapped = unwrapResponse(data)

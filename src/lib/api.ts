@@ -1,21 +1,10 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
-// Development'ta proxy kullan, production'da direkt URL
-// import.meta.env.DEV yerine daha güvenilir kontrol
 const isDevelopment = import.meta.env.MODE === 'development' || import.meta.env.DEV
 const API_BASE_URL = isDevelopment 
-  ? '/api'  // Vite proxy kullan - http://localhost:5173/api -> http://localhost:8080/api
-  : import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'  // Production URL
+  ? '/api'
+  : import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
 
-console.log('🔵 API Configuration:', {
-  mode: import.meta.env.MODE,
-  isDev: import.meta.env.DEV,
-  isDevelopment,
-  API_BASE_URL,
-  env: import.meta.env,
-})
-
-// Token yönetimi
 export const tokenStorage = {
   getAccessToken: () => localStorage.getItem('accessToken'),
   getRefreshToken: () => localStorage.getItem('refreshToken'),
@@ -29,73 +18,53 @@ export const tokenStorage = {
   },
 }
 
-// Axios instance
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
-  withCredentials: false, // CORS için
-  timeout: 30000, // 30 saniye timeout
+  withCredentials: false,
+  timeout: 30000,
 })
-
-// Request interceptor - Token ekle
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Login ve refresh endpoint'lerinde token ekleme
     const url = config.url || ''
     const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh')
     
-    if (isAuthEndpoint) {
-      console.log('Auth request - no token added:', url)
-      // Auth endpoint'lerinde Authorization header'ını temizle
+    if (!isAuthEndpoint) {
+      let token = tokenStorage.getAccessToken()
+      
+      if (token) {
+        if (!config.headers) {
+          config.headers = {} as any
+        }
+        
+        const cleanToken = token.trim().startsWith('Bearer ') 
+          ? token.trim().substring(7) 
+          : token.trim()
+        
+        config.headers.Authorization = `Bearer ${cleanToken}`
+      } else {
+        tokenStorage.clearTokens()
+        return Promise.reject(new Error('Authentication required. Please login.'))
+      }
+    } else {
       if (config.headers) {
         delete config.headers.Authorization
       }
-      return config
     }
-    
-    const token = tokenStorage.getAccessToken()
-    
-    // Token kontrolü ve header ekleme
-    if (token) {
-      if (!config.headers) {
-        config.headers = {} as any
-      }
-      // Authorization header'ını her zaman Bearer prefix ile ekle
-      config.headers.Authorization = `Bearer ${token.trim()}`
-      console.log('✅ Authorization header added:', {
-        url: config.url,
-        method: config.method,
-        tokenPreview: token.substring(0, 20) + '...',
-      })
-    } else {
-      // Token yoksa isteği iptal et ve login sayfasına yönlendir
-      console.error('❌ No token found - Request blocked:', {
-        url: config.url,
-        method: config.method,
-      })
-      tokenStorage.clearTokens()
-      // Promise reject et - istek gönderilmesin
-      return Promise.reject(new Error('Authentication required. Please login.'))
+    if (!config.headers) {
+      config.headers = {} as any
     }
-    
-    // Detailed request logging
-    console.log('🔵 Request:', {
-      url: config.url,
-      method: config.method?.toUpperCase(),
-      headers: {
-        'Content-Type': config.headers?.['Content-Type'],
-        'Authorization': config.headers?.Authorization ? 'Bearer ***' : 'missing',
-      },
-      hasToken: !!token,
-      data: config.data ? (typeof config.data === 'string' ? config.data : JSON.stringify(config.data)) : undefined,
-    })
+    config.headers['Content-Type'] = 'application/json'
+    config.headers['Accept'] = 'application/json'
     
     return config
   },
-  (error: AxiosError) => Promise.reject(error)
+  (error: AxiosError) => {
+    return Promise.reject(error)
+  }
 )
 
 // Response interceptor - Token refresh
@@ -118,55 +87,9 @@ const processQueue = (error: AxiosError | null, token: string | null = null) => 
 
 apiClient.interceptors.response.use(
   (response) => {
-    // Detailed response logging
-    console.log('✅ Response:', {
-      url: response.config.url,
-      method: response.config.method?.toUpperCase(),
-      status: response.status,
-      statusText: response.statusText,
-      data: response.data ? (typeof response.data === 'object' ? JSON.stringify(response.data).substring(0, 200) + '...' : response.data) : undefined,
-    })
     return response
   },
   async (error: AxiosError) => {
-    // Full error logging - Request + Response
-    const errorDetails = {
-      url: error.config?.url,
-      method: error.config?.method?.toUpperCase(),
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      requestHeaders: error.config?.headers,
-      requestData: error.config?.data,
-      responseHeaders: error.response?.headers,
-      responseData: error.response?.data,
-      message: error.message,
-      hasToken: !!tokenStorage.getAccessToken(),
-    }
-
-    // 400 Bad Request - Wrong field names
-    if (error.response?.status === 400) {
-      console.error('❌ 400 Bad Request Error (Wrong field names):', errorDetails)
-    }
-    
-    // 403 Forbidden - Token missing or role mismatch
-    if (error.response?.status === 403) {
-      console.error('❌ 403 Forbidden Error (Token missing or role mismatch):', errorDetails)
-    }
-    
-    // 500 Internal Server Error - Null / parsing issue
-    if (error.response?.status === 500) {
-      console.error('❌ 500 Internal Server Error (Null / parsing issue):', errorDetails)
-    }
-    
-    // Other errors
-    if (error.response && ![400, 403, 500].includes(error.response.status)) {
-      console.error(`❌ ${error.response.status} Error:`, errorDetails)
-    }
-    
-    // Login errors (extra logging)
-    if (error.config?.url?.includes('/auth/login')) {
-      console.error('❌ Login Error:', errorDetails)
-    }
 
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean
@@ -197,10 +120,9 @@ apiClient.interceptors.response.use(
       }
 
       try {
-        // Refresh token için direkt axios kullan (interceptor'dan kaçınmak için)
         const refreshUrl = isDevelopment 
-          ? '/api/auth/refresh'  // Proxy kullan
-          : `${API_BASE_URL}/auth/refresh`  // Direkt URL
+          ? '/api/auth/refresh'
+          : `${API_BASE_URL}/auth/refresh`
         
         const response = await axios.post(refreshUrl, { refreshToken }, {
           headers: {
@@ -209,17 +131,14 @@ apiClient.interceptors.response.use(
           },
         })
         
-        // Backend response formatı: { success: true, data: { accessToken, refreshToken } }
         let accessToken: string
         let newRefreshToken: string
         
         if (response.data && typeof response.data === 'object') {
           if ('success' in response.data && response.data.success && response.data.data) {
-            // ApiResponse formatı
             accessToken = response.data.data.accessToken
             newRefreshToken = response.data.data.refreshToken || refreshToken
           } else if ('accessToken' in response.data) {
-            // Direkt format
             accessToken = response.data.accessToken
             newRefreshToken = response.data.refreshToken || refreshToken
           } else {
@@ -234,10 +153,12 @@ apiClient.interceptors.response.use(
         }
         
         tokenStorage.setTokens(accessToken, newRefreshToken)
-        console.log('✅ Token refreshed successfully')
 
         if (originalRequest.headers) {
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`
+          const cleanToken = accessToken.trim().startsWith('Bearer ') 
+            ? accessToken.trim().substring(7) 
+            : accessToken.trim()
+          originalRequest.headers.Authorization = `Bearer ${cleanToken}`
         }
 
         processQueue(null, accessToken)
@@ -252,15 +173,10 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // 403 Forbidden - Token missing or role mismatch
     if (error.response?.status === 403) {
-      // Token yoksa, login sayfasına yönlendir
       if (!tokenStorage.getAccessToken()) {
-        console.warn('⚠️ No token found, redirecting to login')
         tokenStorage.clearTokens()
         window.location.href = '/login'
-      } else {
-        console.warn('⚠️ Token exists but 403 - possible role mismatch or expired token')
       }
     }
 

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -31,6 +32,8 @@ export function MaintenancesPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [paidFilter, setPaidFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [maintenanceToDelete, setMaintenanceToDelete] = useState<number | null>(null)
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
@@ -47,7 +50,7 @@ export function MaintenancesPage() {
   const { data: summary } = useQuery({
     queryKey: ['maintenances', 'summary'],
     queryFn: () => maintenanceService.getSummary(),
-    retry: false, // Endpoint yoksa tekrar deneme
+    retry: false,
   })
 
   const markPaidMutation = useMutation({
@@ -74,7 +77,6 @@ export function MaintenancesPage() {
     },
   })
 
-  // Güvenli array kontrolü
   const maintenancesArray = Array.isArray(maintenances) ? maintenances : []
   const filteredMaintenances = maintenancesArray.filter(
     (maintenance) =>
@@ -84,8 +86,14 @@ export function MaintenancesPage() {
   )
 
   const handleDelete = (id: number) => {
-    if (window.confirm('Bu bakım kaydını silmek istediğinize emin misiniz?')) {
-      deleteMutation.mutate(id)
+    setMaintenanceToDelete(id)
+    setConfirmDeleteOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (maintenanceToDelete !== null) {
+      deleteMutation.mutate(maintenanceToDelete)
+      setMaintenanceToDelete(null)
     }
   }
 
@@ -282,6 +290,17 @@ export function MaintenancesPage() {
           </Table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Bakım Kaydını Sil"
+        message="Bu bakım kaydını silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        confirmText="Evet, Sil"
+        cancelText="İptal"
+        onConfirm={confirmDelete}
+        variant="destructive"
+      />
     </div>
   )
 }

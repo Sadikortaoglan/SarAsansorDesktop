@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { offerService, type Offer } from '@/services/offer.service'
 import { partService } from '@/services/part.service'
+import { elevatorService } from '@/services/elevator.service'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { TableResponsive } from '@/components/ui/table-responsive'
 import {
@@ -21,15 +23,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Eye, Trash2, Download } from 'lucide-react'
+import { Plus, Eye, Edit, Trash2, Download } from 'lucide-react'
 import { formatDateShort, formatCurrency } from '@/lib/utils'
 
 export function OffersPage() {
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [offerToDelete, setOfferToDelete] = useState<number | null>(null)
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
@@ -38,7 +45,6 @@ export function OffersPage() {
     queryFn: () => offerService.getAll(),
   })
 
-  // Güvenli array kontrolü
   const offersArray = Array.isArray(offers) ? offers : []
 
   const deleteMutation = useMutation({
@@ -54,8 +60,14 @@ export function OffersPage() {
   })
 
   const handleDelete = (id: number) => {
-    if (window.confirm('Bu teklifi silmek istediğinize emin misiniz?')) {
-      deleteMutation.mutate(id)
+    setOfferToDelete(id)
+    setConfirmDeleteOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (offerToDelete !== null) {
+      deleteMutation.mutate(offerToDelete)
+      setOfferToDelete(null)
     }
   }
 
@@ -101,30 +113,41 @@ export function OffersPage() {
       render: (offer: Offer) => <span className="font-medium">#{offer.id}</span>,
     },
     {
-      key: 'customerName',
-      header: 'Müşteri',
-      mobileLabel: 'Müşteri',
+      key: 'elevator',
+      header: 'Asansör',
+      mobileLabel: 'Asansör',
       mobilePriority: 9,
-      render: (offer: Offer) => offer.customerName,
+      render: (offer: Offer) => offer.elevator 
+        ? `${offer.elevator.kimlikNo} - ${offer.elevator.bina}`
+        : `#${offer.elevatorId}`,
     },
     {
-      key: 'offerDate',
-      header: 'Teklif Tarihi',
-      mobileLabel: 'Teklif Tarihi',
+      key: 'date',
+      header: 'Tarih',
+      mobileLabel: 'Tarih',
       mobilePriority: 6,
-      render: (offer: Offer) => formatDateShort(offer.offerDate),
+      render: (offer: Offer) => formatDateShort(offer.date),
     },
     {
-      key: 'validUntil',
-      header: 'Geçerlilik',
-      mobileLabel: 'Geçerlilik',
+      key: 'status',
+      header: 'Durum',
+      mobileLabel: 'Durum',
       mobilePriority: 5,
-      render: (offer: Offer) => formatDateShort(offer.validUntil),
+      render: (offer: Offer) => {
+        const statusMap: Record<string, { label: string; variant: 'default' | 'success' | 'destructive' | 'warning' }> = {
+          PENDING: { label: 'Beklemede', variant: 'warning' },
+          ACCEPTED: { label: 'Kabul Edildi', variant: 'success' },
+          REJECTED: { label: 'Reddedildi', variant: 'destructive' },
+          EXPIRED: { label: 'Süresi Doldu', variant: 'destructive' },
+        }
+        const status = statusMap[offer.status] || { label: offer.status, variant: 'default' as const }
+        return <Badge variant={status.variant}>{status.label}</Badge>
+      },
     },
     {
       key: 'totalAmount',
       header: 'Toplam Tutar',
-      mobileLabel: 'Toplam Tutar',
+      mobileLabel: 'Toplam',
       mobilePriority: 8,
       render: (offer: Offer) => <span className="font-medium">{formatCurrency(offer.totalAmount)}</span>,
     },
@@ -157,6 +180,29 @@ export function OffersPage() {
             variant="ghost"
             size="icon"
             className="h-8 w-8"
+            onClick={async () => {
+              try {
+                const freshOffer = await offerService.getById(offer.id)
+                if (freshOffer) {
+                  setSelectedOffer(freshOffer)
+                  setIsDialogOpen(true)
+                }
+              } catch (error) {
+                toast({
+                  title: 'Hata',
+                  description: 'Teklif bilgileri yüklenirken bir hata oluştu.',
+                  variant: 'destructive',
+                })
+              }
+            }}
+            aria-label="Düzenle"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => handleDelete(offer.id)}
             aria-label="Sil"
           >
@@ -174,15 +220,21 @@ export function OffersPage() {
           <h1 className="text-2xl sm:text-3xl font-bold">Teklifler</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">Tüm tekliflerin listesi</p>
         </div>
-        <Dialog>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto">
+            <Button 
+              onClick={() => setSelectedOffer(null)}
+              className="w-full sm:w-auto"
+            >
               <Plus className="mr-2 h-4 w-4" />
               Yeni Teklif Oluştur
             </Button>
           </DialogTrigger>
           <OfferFormDialog
+            offer={selectedOffer}
+            onClose={() => setIsDialogOpen(false)}
             onSuccess={() => {
+              setIsDialogOpen(false)
               queryClient.invalidateQueries({ queryKey: ['offers'] })
             }}
           />
@@ -203,16 +255,36 @@ export function OffersPage() {
           emptyMessage="Teklif bulunamadı"
         />
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Teklifi Sil"
+        message="Bu teklifi silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        confirmText="Evet, Sil"
+        cancelText="İptal"
+        onConfirm={confirmDelete}
+        variant="destructive"
+      />
     </div>
   )
 }
 
-function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
+function OfferFormDialog({ 
+  offer, 
+  onClose, 
+  onSuccess 
+}: { 
+  offer: Offer | null
+  onClose: () => void
+  onSuccess: () => void 
+}) {
   const [formData, setFormData] = useState({
-    customerName: '',
-    customerAddress: '',
-    customerPhone: '',
-    validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    elevatorId: '',
+    date: new Date().toISOString().split('T')[0],
+    vatRate: 20.0,
+    discountAmount: 0.0,
+    status: 'PENDING' as 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED',
     items: [] as Array<{ partId: number; quantity: number; unitPrice: number }>,
   })
   const [selectedPartId, setSelectedPartId] = useState<string>('')
@@ -224,23 +296,78 @@ function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
     queryFn: () => partService.getAll(),
   })
 
-  // Güvenli array kontrolü
+  const { data: elevators } = useQuery({
+    queryKey: ['elevators'],
+    queryFn: () => elevatorService.getAll(),
+  })
+
   const partsArray = Array.isArray(parts) ? parts : []
+  const elevatorsArray = Array.isArray(elevators) ? elevators : []
+
+  useEffect(() => {
+    if (offer) {
+      setFormData({
+        elevatorId: offer.elevatorId ? offer.elevatorId.toString() : '',
+        date: offer.date ? offer.date.split('T')[0] : new Date().toISOString().split('T')[0],
+        vatRate: offer.vatRate ?? 20.0,
+        discountAmount: offer.discountAmount ?? 0.0,
+        status: offer.status || 'PENDING',
+        items: offer.items.map(item => ({
+          partId: item.partId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })) || [],
+      })
+    } else {
+      setFormData({
+        elevatorId: '',
+        date: new Date().toISOString().split('T')[0],
+        vatRate: 20.0,
+        discountAmount: 0.0,
+        status: 'PENDING',
+        items: [],
+      })
+    }
+  }, [offer])
 
   const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => offerService.create(data),
+    mutationFn: (data: { elevatorId: number; date: string; vatRate: number; discountAmount: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED'; items: Array<{ partId: number; quantity: number; unitPrice: number }> }) => offerService.create(data),
     onSuccess: () => {
       toast({
         title: 'Başarılı',
         description: 'Teklif başarıyla oluşturuldu.',
         variant: 'success',
       })
+      onClose()
       onSuccess()
     },
     onError: () => {
       toast({
         title: 'Hata',
         description: 'Teklif oluşturulurken bir hata oluştu.',
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { elevatorId: number; date: string; vatRate: number; discountAmount: number; status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED'; items: Array<{ partId: number; quantity: number; unitPrice: number }> }) => {
+      if (!offer) throw new Error('Offer ID required')
+      return offerService.update(offer.id, data)
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Başarılı',
+        description: 'Teklif başarıyla güncellendi.',
+        variant: 'success',
+      })
+      onClose()
+      onSuccess()
+    },
+    onError: () => {
+      toast({
+        title: 'Hata',
+        description: 'Teklif güncellenirken bir hata oluştu.',
         variant: 'destructive',
       })
     },
@@ -270,6 +397,14 @@ function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!formData.elevatorId) {
+      toast({
+        title: 'Hata',
+        description: 'Lütfen bir asansör seçin.',
+        variant: 'destructive',
+      })
+      return
+    }
     if (formData.items.length === 0) {
       toast({
         title: 'Hata',
@@ -278,58 +413,112 @@ function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
       })
       return
     }
-    createMutation.mutate(formData)
+    if (offer) {
+      updateMutation.mutate({
+        ...formData,
+        elevatorId: Number(formData.elevatorId),
+      })
+    } else {
+      createMutation.mutate({
+        ...formData,
+        elevatorId: Number(formData.elevatorId),
+      })
+    }
   }
 
-  const totalAmount = formData.items.reduce(
+  const subtotal = formData.items.reduce(
     (sum, item) => sum + item.quantity * item.unitPrice,
     0
   )
+  const afterDiscount = subtotal - formData.discountAmount
+  const vatAmount = afterDiscount * (formData.vatRate / 100)
+  const totalAmount = afterDiscount + vatAmount
 
   return (
     <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-h-[85vh]">
       <DialogHeader>
-        <DialogTitle>Yeni Teklif Oluştur</DialogTitle>
-        <DialogDescription>Teklif bilgilerini ve kalemlerini girin</DialogDescription>
+        <DialogTitle>{offer ? 'Teklif Düzenle' : 'Yeni Teklif Oluştur'}</DialogTitle>
+        <DialogDescription>
+          {offer ? 'Teklif bilgilerini güncelleyin' : 'Teklif bilgilerini ve kalemlerini girin'}
+        </DialogDescription>
       </DialogHeader>
       <form onSubmit={handleSubmit}>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="customerName">Müşteri Adı *</Label>
+              <Label htmlFor="elevatorId">Asansör *</Label>
+              <Select
+                value={formData.elevatorId}
+                onValueChange={(value) => setFormData({ ...formData, elevatorId: value })}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Asansör seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {elevatorsArray.map((elevator) => (
+                    <SelectItem key={elevator.id} value={elevator.id.toString()}>
+                      {elevator.kimlikNo} - {elevator.bina}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="date">Tarih *</Label>
               <Input
-                id="customerName"
-                value={formData.customerName}
-                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                id="date"
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                required
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="vatRate">KDV Oranı (%) *</Label>
+              <Input
+                id="vatRate"
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={formData.vatRate}
+                onChange={(e) => setFormData({ ...formData, vatRate: Number(e.target.value) })}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="customerPhone">Telefon</Label>
+              <Label htmlFor="discountAmount">İndirim Tutarı</Label>
               <Input
-                id="customerPhone"
-                value={formData.customerPhone}
-                onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
+                id="discountAmount"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.discountAmount}
+                onChange={(e) => setFormData({ ...formData, discountAmount: Number(e.target.value) })}
               />
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="customerAddress">Adres</Label>
-            <Input
-              id="customerAddress"
-              value={formData.customerAddress}
-              onChange={(e) => setFormData({ ...formData, customerAddress: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="validUntil">Geçerlilik Tarihi *</Label>
-            <Input
-              id="validUntil"
-              type="date"
-              value={formData.validUntil}
-              onChange={(e) => setFormData({ ...formData, validUntil: e.target.value })}
-              required
-            />
+            <div className="space-y-2">
+              <Label htmlFor="status">Durum *</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED') =>
+                  setFormData({ ...formData, status: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">Beklemede</SelectItem>
+                  <SelectItem value="ACCEPTED">Kabul Edildi</SelectItem>
+                  <SelectItem value="REJECTED">Reddedildi</SelectItem>
+                  <SelectItem value="EXPIRED">Süresi Doldu</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="border-t pt-4">
@@ -397,11 +586,24 @@ function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
                     })}
                   </TableBody>
                 </Table>
-                <div className="p-4 border-t">
-                  <div className="flex justify-end">
-                    <div className="text-lg font-bold">
-                      Toplam: {formatCurrency(totalAmount)}
+                <div className="p-4 border-t space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Ara Toplam:</span>
+                    <span className="font-medium">{formatCurrency(subtotal)}</span>
+                  </div>
+                  {formData.discountAmount > 0 && (
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>İndirim:</span>
+                      <span className="font-medium">-{formatCurrency(formData.discountAmount)}</span>
                     </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span>KDV ({formData.vatRate}%):</span>
+                    <span className="font-medium">{formatCurrency(vatAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                    <span>Toplam:</span>
+                    <span>{formatCurrency(totalAmount)}</span>
                   </div>
                 </div>
               </div>
@@ -409,8 +611,11 @@ function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
           </div>
         </div>
         <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
-          <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto">
-            Oluştur
+          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
+            İptal
+          </Button>
+          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="w-full sm:w-auto">
+            {offer ? 'Güncelle' : 'Oluştur'}
           </Button>
         </DialogFooter>
       </form>
@@ -419,37 +624,53 @@ function OfferFormDialog({ onSuccess }: { onSuccess: () => void }) {
 }
 
 function OfferDetailDialog({ offer }: { offer: Offer }) {
+  const statusMap: Record<string, { label: string; variant: 'default' | 'success' | 'destructive' | 'warning' }> = {
+    PENDING: { label: 'Beklemede', variant: 'warning' },
+    ACCEPTED: { label: 'Kabul Edildi', variant: 'success' },
+    REJECTED: { label: 'Reddedildi', variant: 'destructive' },
+    EXPIRED: { label: 'Süresi Doldu', variant: 'destructive' },
+  }
+  const status = statusMap[offer.status] || { label: offer.status, variant: 'default' as const }
+
   return (
     <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Teklif Detayı #{offer.id}</DialogTitle>
-        <DialogDescription>{offer.customerName}</DialogDescription>
+        <DialogDescription>
+          {offer.elevator 
+            ? `${offer.elevator.kimlikNo} - ${offer.elevator.bina}`
+            : `Asansör #${offer.elevatorId}`}
+        </DialogDescription>
       </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label className="text-muted-foreground">Müşteri</Label>
-              <p className="font-medium">{offer.customerName}</p>
+              <Label className="text-muted-foreground">Asansör</Label>
+              <p className="font-medium">
+                {offer.elevator 
+                  ? `${offer.elevator.kimlikNo} - ${offer.elevator.bina}`
+                  : `#${offer.elevatorId}`}
+              </p>
             </div>
             <div>
-              <Label className="text-muted-foreground">Telefon</Label>
-              <p className="font-medium">{offer.customerPhone || '-'}</p>
+              <Label className="text-muted-foreground">Durum</Label>
+              <p className="font-medium">
+                <Badge variant={status.variant}>{status.label}</Badge>
+              </p>
             </div>
           </div>
-        {offer.customerAddress && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <Label className="text-muted-foreground">Adres</Label>
-            <p className="font-medium">{offer.customerAddress}</p>
-          </div>
-        )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <Label className="text-muted-foreground">Teklif Tarihi</Label>
-            <p className="font-medium">{formatDateShort(offer.offerDate)}</p>
+            <Label className="text-muted-foreground">Tarih</Label>
+            <p className="font-medium">{formatDateShort(offer.date)}</p>
           </div>
           <div>
-            <Label className="text-muted-foreground">Geçerlilik</Label>
-            <p className="font-medium">{formatDateShort(offer.validUntil)}</p>
+            <Label className="text-muted-foreground">KDV Oranı</Label>
+            <p className="font-medium">%{offer.vatRate}</p>
+          </div>
+          <div>
+            <Label className="text-muted-foreground">İndirim</Label>
+            <p className="font-medium">{formatCurrency(offer.discountAmount)}</p>
           </div>
         </div>
 
@@ -476,11 +697,24 @@ function OfferDetailDialog({ offer }: { offer: Offer }) {
                 ))}
               </TableBody>
             </Table>
-            <div className="p-4 border-t">
-              <div className="flex justify-end">
-                <div className="text-xl font-bold">
-                  Toplam: {formatCurrency(offer.totalAmount)}
+            <div className="p-4 border-t space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Ara Toplam:</span>
+                <span className="font-medium">{formatCurrency(offer.subtotal)}</span>
+              </div>
+              {offer.discountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>İndirim:</span>
+                  <span className="font-medium">-{formatCurrency(offer.discountAmount)}</span>
                 </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span>KDV ({offer.vatRate}%):</span>
+                <span className="font-medium">{formatCurrency(offer.totalAmount - offer.subtotal + offer.discountAmount)}</span>
+              </div>
+              <div className="flex justify-between text-xl font-bold pt-2 border-t">
+                <span>Toplam:</span>
+                <span>{formatCurrency(offer.totalAmount)}</span>
               </div>
             </div>
           </div>

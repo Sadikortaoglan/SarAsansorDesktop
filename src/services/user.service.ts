@@ -25,11 +25,9 @@ export const userService = {
   getAll: async (): Promise<User[]> => {
     try {
       const { data } = await apiClient.get<ApiResponse<User[]>>('/users')
-      return unwrapArrayResponse(data, true) // Opsiyonel endpoint - hata durumunda boş array döndür
+      return unwrapArrayResponse(data, true)
     } catch (error: any) {
-      // Backend'de endpoint yoksa boş array döndür
       if (error.response?.status === 404 || error.response?.data?.success === false) {
-        console.warn('Users endpoint not available:', error.response?.data?.message)
         return []
       }
       throw error

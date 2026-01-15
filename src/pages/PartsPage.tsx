@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { partService, type Part } from '@/services/part.service'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
@@ -24,6 +25,8 @@ export function PartsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedPart, setSelectedPart] = useState<Part | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [partToDelete, setPartToDelete] = useState<number | null>(null)
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
@@ -51,15 +54,20 @@ export function PartsPage() {
     },
   })
 
-  // Güvenli array kontrolü
   const partsArray = Array.isArray(parts) ? parts : []
   const filteredParts = partsArray.filter(
     (part) => part.name?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const handleDelete = (id: number) => {
-    if (window.confirm('Bu parçayı silmek istediğinize emin misiniz?')) {
-      deleteMutation.mutate(id)
+    setPartToDelete(id)
+    setConfirmDeleteOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (partToDelete !== null) {
+      deleteMutation.mutate(partToDelete)
+      setPartToDelete(null)
     }
   }
 
@@ -193,6 +201,17 @@ export function PartsPage() {
           emptyMessage="Parça bulunamadı"
         />
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Parçayı Sil"
+        message="Bu parçayı silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        confirmText="Evet, Sil"
+        cancelText="İptal"
+        onConfirm={confirmDelete}
+        variant="destructive"
+      />
     </div>
   )
 }
@@ -207,12 +226,30 @@ function PartFormDialog({
   onSuccess: () => void
 }) {
   const [formData, setFormData] = useState({
-    name: part?.name || '',
-    description: part?.description || '',
-    stockLevel: part?.stockLevel || 0,
-    unitPrice: part?.unitPrice || 0,
+    name: '',
+    description: '',
+    stockLevel: 0,
+    unitPrice: 0,
   })
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (part) {
+      setFormData({
+        name: part.name || '',
+        description: part.description || '',
+        stockLevel: part.stockLevel || 0,
+        unitPrice: part.unitPrice || 0,
+      })
+    } else {
+      setFormData({
+        name: '',
+        description: '',
+        stockLevel: 0,
+        unitPrice: 0,
+      })
+    }
+  }, [part])
 
   const createMutation = useMutation({
     mutationFn: (data: typeof formData) => partService.create(data),
@@ -222,6 +259,7 @@ function PartFormDialog({
         description: 'Parça başarıyla eklendi.',
         variant: 'success',
       })
+      onClose()
       onSuccess()
     },
     onError: () => {
@@ -244,6 +282,7 @@ function PartFormDialog({
         description: 'Parça başarıyla güncellendi.',
         variant: 'success',
       })
+      onClose()
       onSuccess()
     },
     onError: () => {

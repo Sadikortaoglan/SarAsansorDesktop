@@ -208,6 +208,7 @@ function InspectionFormDialog({
         description: 'Denetim başarıyla eklendi.',
         variant: 'success',
       })
+      onClose()
       onSuccess()
     },
     onError: () => {

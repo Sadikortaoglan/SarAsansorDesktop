@@ -22,6 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -51,7 +52,6 @@ export function FaultsPage() {
     queryFn: () => faultService.getCompleted(),
   })
 
-  // Güvenli array kontrolü
   const openFaultsArray = Array.isArray(openFaults) ? openFaults : []
   const completedFaultsArray = Array.isArray(completedFaults) ? completedFaults : []
   
@@ -202,6 +202,8 @@ export function FaultsPage() {
 }
 
 function FaultTableRow({ fault }: { fault: Fault }) {
+  const [confirmStatusUpdateOpen, setConfirmStatusUpdateOpen] = useState(false)
+  const [newStatus, setNewStatus] = useState<'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | null>(null)
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
@@ -215,6 +217,7 @@ function FaultTableRow({ fault }: { fault: Fault }) {
         description: 'Arıza durumu güncellendi.',
         variant: 'success',
       })
+      setNewStatus(null)
     },
     onError: () => {
       toast({
@@ -222,8 +225,21 @@ function FaultTableRow({ fault }: { fault: Fault }) {
         description: 'Durum güncellenirken bir hata oluştu.',
         variant: 'destructive',
       })
+      setNewStatus(null)
     },
   })
+
+  const handleStatusChange = (value: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED') => {
+    setNewStatus(value)
+    setConfirmStatusUpdateOpen(true)
+  }
+
+  const confirmStatusUpdate = () => {
+    if (newStatus) {
+      updateStatusMutation.mutate(newStatus)
+      setConfirmStatusUpdateOpen(false)
+    }
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -252,23 +268,31 @@ function FaultTableRow({ fault }: { fault: Fault }) {
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-2">
           {fault.durum !== 'COMPLETED' && (
-            <Select
-              value={fault.durum}
-              onValueChange={(value: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED') => {
-                if (window.confirm('Durumu güncellemek istediğinize emin misiniz?')) {
-                  updateStatusMutation.mutate(value)
-                }
-              }}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="OPEN">Açık</SelectItem>
-                <SelectItem value="IN_PROGRESS">Devam Ediyor</SelectItem>
-                <SelectItem value="COMPLETED">Tamamlandı</SelectItem>
-              </SelectContent>
-            </Select>
+            <>
+              <Select
+                value={fault.durum}
+                onValueChange={handleStatusChange}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="OPEN">Açık</SelectItem>
+                  <SelectItem value="IN_PROGRESS">Devam Ediyor</SelectItem>
+                  <SelectItem value="COMPLETED">Tamamlandı</SelectItem>
+                </SelectContent>
+              </Select>
+              <ConfirmDialog
+                open={confirmStatusUpdateOpen}
+                onOpenChange={setConfirmStatusUpdateOpen}
+                title="Durumu Güncelle"
+                message="Arıza durumunu güncellemek istediğinize emin misiniz?"
+                confirmText="Evet, Güncelle"
+                cancelText="İptal"
+                onConfirm={confirmStatusUpdate}
+                variant="default"
+              />
+            </>
           )}
         </div>
       </TableCell>
@@ -297,7 +321,6 @@ function FaultFormDialog({
     queryFn: () => elevatorService.getAll(),
   })
 
-  // Güvenli array kontrolü
   const elevatorsArray = Array.isArray(elevators) ? elevators : []
 
   const createMutation = useMutation({
