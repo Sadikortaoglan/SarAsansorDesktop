@@ -84,7 +84,7 @@ export function PartsPage() {
       header: 'Açıklama',
       mobileLabel: 'Açıklama',
       mobilePriority: 5,
-      render: (part: Part) => part.description || '-',
+      render: (part: Part) => part.description && part.description.trim() ? part.description : '—',
     },
     {
       key: 'stockLevel',

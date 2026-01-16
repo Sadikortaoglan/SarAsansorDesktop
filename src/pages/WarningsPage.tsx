@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { warningService } from '@/services/warning.service'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,10 +13,13 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { AlertTriangle, Clock } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { AlertTriangle, Clock, Search } from 'lucide-react'
 import { formatDateShort } from '@/lib/utils'
 
 export function WarningsPage() {
+  const [searchTerm, setSearchTerm] = useState('')
+
   const { data: expiredWarnings, isLoading: expiredLoading } = useQuery({
     queryKey: ['warnings', 'EXPIRED'],
     queryFn: () => warningService.getExpired(),
@@ -29,6 +33,29 @@ export function WarningsPage() {
   // Güvenli array kontrolü
   const expiredWarningsArray = Array.isArray(expiredWarnings) ? expiredWarnings : []
   const warningWarningsArray = Array.isArray(warningWarnings) ? warningWarnings : []
+
+  // Filtreleme fonksiyonu
+  const filterWarnings = (warnings: typeof expiredWarningsArray) => {
+    if (!searchTerm.trim()) {
+      return warnings
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim()
+    return warnings.filter((warning) => {
+      const kimlikNo = warning.elevator?.kimlikNo || ''
+      const bina = warning.elevator?.bina || warning.elevator?.binaAdi || ''
+      const adres = warning.elevator?.adres || ''
+
+      return (
+        kimlikNo.toLowerCase().includes(searchLower) ||
+        bina.toLowerCase().includes(searchLower) ||
+        adres.toLowerCase().includes(searchLower)
+      )
+    })
+  }
+
+  const filteredExpiredWarnings = filterWarnings(expiredWarningsArray)
+  const filteredWarningWarnings = filterWarnings(warningWarningsArray)
 
   return (
     <div className="space-y-6">
@@ -49,6 +76,18 @@ export function WarningsPage() {
           </TabsTrigger>
         </TabsList>
 
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Bina, adres veya kimlik no ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+
         <TabsContent value="expired" className="space-y-4">
           <Card>
             <CardHeader>
@@ -62,7 +101,7 @@ export function WarningsPage() {
                     <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
-              ) : expiredWarningsArray.length > 0 ? (
+              ) : filteredExpiredWarnings.length > 0 ? (
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
@@ -75,7 +114,7 @@ export function WarningsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {expiredWarningsArray.map((warning) => (
+                      {filteredExpiredWarnings.map((warning) => (
                         <TableRow key={warning.id}>
                           <TableCell className="font-medium">
                             {warning.elevator?.kimlikNo || '-'}
@@ -95,6 +134,10 @@ export function WarningsPage() {
                     </TableBody>
                   </Table>
                 </div>
+              ) : searchTerm.trim() ? (
+                <p className="text-center text-muted-foreground">
+                  Sonuç bulunamadı.
+                </p>
               ) : (
                 <p className="text-center text-muted-foreground">
                   Süresi geçen asansör bulunmamaktadır.
@@ -117,7 +160,7 @@ export function WarningsPage() {
                     <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
-              ) : warningWarningsArray.length > 0 ? (
+              ) : filteredWarningWarnings.length > 0 ? (
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
@@ -130,7 +173,7 @@ export function WarningsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {warningWarningsArray.map((warning) => (
+                      {filteredWarningWarnings.map((warning) => (
                         <TableRow key={warning.id}>
                           <TableCell className="font-medium">
                             {warning.elevator?.kimlikNo || '-'}
@@ -150,6 +193,10 @@ export function WarningsPage() {
                     </TableBody>
                   </Table>
                 </div>
+              ) : searchTerm.trim() ? (
+                <p className="text-center text-muted-foreground">
+                  Sonuç bulunamadı.
+                </p>
               ) : (
                 <p className="text-center text-muted-foreground">
                   30 gün içinde süresi dolacak asansör bulunmamaktadır.
