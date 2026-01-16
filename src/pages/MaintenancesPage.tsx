@@ -27,6 +27,8 @@ export function MaintenancesPage() {
   const [paidFilter, setPaidFilter] = useState<'all' | 'paid' | 'unpaid'>('all')
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [maintenanceToDelete, setMaintenanceToDelete] = useState<number | null>(null)
+  const [confirmMarkPaidOpen, setConfirmMarkPaidOpen] = useState(false)
+  const [maintenanceToMarkPaid, setMaintenanceToMarkPaid] = useState<Maintenance | null>(null)
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
@@ -40,11 +42,39 @@ export function MaintenancesPage() {
       }),
   })
 
+  // Summary için tüm bakımları getir (filtre olmadan)
+  const { data: allMaintenances } = useQuery({
+    queryKey: ['maintenances', 'all'],
+    queryFn: () => maintenanceService.getAll(),
+  })
+
   const { data: summary } = useQuery({
     queryKey: ['maintenances', 'summary'],
     queryFn: () => maintenanceService.getSummary(),
     retry: false,
   })
+
+  const maintenancesArray = Array.isArray(maintenances) ? maintenances : []
+  const allMaintenancesArray = Array.isArray(allMaintenances) ? allMaintenances : []
+
+  // Eğer summary'de sayılar yoksa, tüm bakımlar listesinden hesapla (filtrelenmiş değil)
+  const calculatedSummary = summary ? {
+    ...summary,
+    total: summary.total ?? allMaintenancesArray.length,
+    paid: summary.paid ?? allMaintenancesArray.filter(m => m.odendi).length,
+    unpaid: summary.unpaid ?? allMaintenancesArray.filter(m => !m.odendi).length,
+    totalAmount: summary.totalAmount ?? allMaintenancesArray.reduce((sum, m) => sum + (m.ucret || 0), 0),
+    paidAmount: summary.paidAmount ?? allMaintenancesArray.filter(m => m.odendi).reduce((sum, m) => sum + (m.ucret || 0), 0),
+    unpaidAmount: summary.unpaidAmount ?? allMaintenancesArray.filter(m => !m.odendi).reduce((sum, m) => sum + (m.ucret || 0), 0),
+  } : (allMaintenancesArray.length > 0 ? {
+    total: allMaintenancesArray.length,
+    paid: allMaintenancesArray.filter(m => m.odendi).length,
+    unpaid: allMaintenancesArray.filter(m => !m.odendi).length,
+    totalAmount: allMaintenancesArray.reduce((sum, m) => sum + (m.ucret || 0), 0),
+    paidAmount: allMaintenancesArray.filter(m => m.odendi).reduce((sum, m) => sum + (m.ucret || 0), 0),
+    unpaidAmount: allMaintenancesArray.filter(m => !m.odendi).reduce((sum, m) => sum + (m.ucret || 0), 0),
+    monthlyData: [],
+  } : null)
 
   const markPaidMutation = useMutation({
     mutationFn: (id: number) => maintenanceService.markPaid(id),
@@ -70,7 +100,6 @@ export function MaintenancesPage() {
     },
   })
 
-  const maintenancesArray = Array.isArray(maintenances) ? maintenances : []
   const filteredMaintenances = maintenancesArray.filter(
     (maintenance) =>
       maintenance.elevatorBuildingName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -90,6 +119,18 @@ export function MaintenancesPage() {
     }
   }
 
+  const handleMarkPaid = (maintenance: Maintenance) => {
+    setMaintenanceToMarkPaid(maintenance)
+    setConfirmMarkPaidOpen(true)
+  }
+
+  const confirmMarkPaid = () => {
+    if (maintenanceToMarkPaid !== null) {
+      markPaidMutation.mutate(maintenanceToMarkPaid.id)
+      setMaintenanceToMarkPaid(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -99,14 +140,14 @@ export function MaintenancesPage() {
         </div>
       </div>
 
-      {summary && (
+      {calculatedSummary && (
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">Toplam Bakım</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{summary.total}</div>
+              <div className="text-2xl font-bold">{calculatedSummary.total}</div>
             </CardContent>
           </Card>
           <Card>
@@ -114,7 +155,7 @@ export function MaintenancesPage() {
               <CardTitle className="text-sm font-medium">Ödenen</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{summary.paid}</div>
+              <div className="text-2xl font-bold text-green-600">{calculatedSummary.paid}</div>
             </CardContent>
           </Card>
           <Card>
@@ -122,7 +163,7 @@ export function MaintenancesPage() {
               <CardTitle className="text-sm font-medium">Ödenmeyen</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{summary.unpaid}</div>
+              <div className="text-2xl font-bold text-red-600">{calculatedSummary.unpaid}</div>
             </CardContent>
           </Card>
           <Card>
@@ -130,7 +171,7 @@ export function MaintenancesPage() {
               <CardTitle className="text-sm font-medium">Toplam Tutar</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(summary.totalAmount)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(calculatedSummary.totalAmount)}</div>
             </CardContent>
           </Card>
           <Card>
@@ -139,7 +180,7 @@ export function MaintenancesPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(summary.paidAmount)}
+                {formatCurrency(calculatedSummary.paidAmount)}
               </div>
             </CardContent>
           </Card>
@@ -149,7 +190,7 @@ export function MaintenancesPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">
-                {formatCurrency(summary.unpaidAmount)}
+                {formatCurrency(calculatedSummary.unpaidAmount)}
               </div>
             </CardContent>
           </Card>
@@ -289,7 +330,7 @@ export function MaintenancesPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => markPaidMutation.mutate(maintenance.id)}
+                      onClick={() => handleMarkPaid(maintenance)}
                       className="h-11 w-11 sm:h-10 sm:w-10"
                     >
                       <Check className="h-4 w-4 text-green-600" />
@@ -321,6 +362,27 @@ export function MaintenancesPage() {
         cancelText="İptal"
         onConfirm={confirmDelete}
         variant="destructive"
+      />
+
+      <ConfirmDialog
+        open={confirmMarkPaidOpen}
+        onOpenChange={setConfirmMarkPaidOpen}
+        title="Ödeme Onayı"
+        message="Bu tahsilat işlemi onaylanacaktır."
+        amount={maintenanceToMarkPaid ? formatCurrency(maintenanceToMarkPaid.ucret) : undefined}
+        transactionContext={
+          maintenanceToMarkPaid
+            ? {
+                service: maintenanceToMarkPaid.aciklama || 'Asansör bakım bedeli',
+                customer: maintenanceToMarkPaid.elevatorBuildingName || undefined,
+                date: maintenanceToMarkPaid.tarih ? formatDateShort(maintenanceToMarkPaid.tarih) : undefined,
+              }
+            : undefined
+        }
+        confirmText="Tahsilatı Onayla"
+        cancelText="İptal"
+        onConfirm={confirmMarkPaid}
+        variant="success"
       />
     </div>
   )

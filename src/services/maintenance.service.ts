@@ -80,8 +80,21 @@ export const maintenanceService = {
     // Backend: Query parameter ?month=YYYY-MM (örn: 2026-01). Boş bırakılırsa bu ay
     try {
       const params = month ? { month } : undefined
-      const { data } = await apiClient.get<ApiResponse<MaintenanceSummary>>('/maintenances/summary', { params })
-      return unwrapResponse(data, true)
+      const { data } = await apiClient.get<ApiResponse<any>>('/maintenances/summary', { params })
+      const unwrapped = unwrapResponse(data, true)
+      
+      if (!unwrapped) return null
+      
+      // Backend'den gelen field isimlerini frontend formatına map et
+      return {
+        total: unwrapped.total ?? unwrapped.totalCount ?? unwrapped.totalMaintenances ?? 0,
+        paid: unwrapped.paid ?? unwrapped.paidCount ?? unwrapped.paidMaintenances ?? 0,
+        unpaid: unwrapped.unpaid ?? unwrapped.unpaidCount ?? unwrapped.unpaidMaintenances ?? 0,
+        totalAmount: unwrapped.totalAmount ?? unwrapped.totalSum ?? unwrapped.totalAmountSum ?? 0,
+        paidAmount: unwrapped.paidAmount ?? unwrapped.paidSum ?? unwrapped.paidAmountSum ?? 0,
+        unpaidAmount: unwrapped.unpaidAmount ?? unwrapped.unpaidSum ?? unwrapped.unpaidAmountSum ?? 0,
+        monthlyData: unwrapped.monthlyData ?? unwrapped.monthly ?? [],
+      }
     } catch (error: any) {
       if (error.response?.status === 404 || error.response?.data?.success === false) {
         return null
