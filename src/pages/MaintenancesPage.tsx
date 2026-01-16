@@ -80,9 +80,9 @@ export function MaintenancesPage() {
   const maintenancesArray = Array.isArray(maintenances) ? maintenances : []
   const filteredMaintenances = maintenancesArray.filter(
     (maintenance) =>
-      (maintenance.elevator?.bina || maintenance.elevator?.binaAdi)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      maintenance.elevatorBuildingName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       maintenance.aciklama?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      maintenance.elevator?.kimlikNo?.toLowerCase().includes(searchTerm.toLowerCase())
+      `ELEV-${maintenance.elevatorId}`.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const handleDelete = (id: number) => {
@@ -241,9 +241,9 @@ export function MaintenancesPage() {
                 filteredMaintenances.map((maintenance: Maintenance) => (
                   <TableRow key={maintenance.id}>
                     <TableCell className="font-medium">
-                      {maintenance.elevator?.kimlikNo || '-'}
+                      ELEV-{maintenance.elevatorId}
                     </TableCell>
-                    <TableCell>{maintenance.elevator?.bina || maintenance.elevator?.binaAdi || '-'}</TableCell>
+                    <TableCell>{maintenance.elevatorBuildingName || '-'}</TableCell>
                     <TableCell>{formatDateShort(maintenance.tarih)}</TableCell>
                     <TableCell>{maintenance.aciklama}</TableCell>
                     <TableCell>{formatCurrency(maintenance.ucret)}</TableCell>

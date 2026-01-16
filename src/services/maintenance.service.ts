@@ -4,6 +4,7 @@ import { unwrapResponse, unwrapArrayResponse, type ApiResponse } from '@/lib/api
 export interface Maintenance {
   id: number
   elevatorId: number
+  elevatorBuildingName?: string
   elevator?: {
     id: number
     kimlikNo: string
@@ -31,11 +32,12 @@ export interface UpdateMaintenanceRequest extends Partial<CreateMaintenanceReque
 
 // Backend'den gelen formatı frontend formatına çevir
 // YENİ BACKEND FIELD İSİMLERİ (eski field'lar KULLANILMIYOR):
-// date, description, technicianUserId, amount, isPaid, paymentDate
+// date, description, technicianUserId, amount, isPaid, paymentDate, elevatorBuildingName, elevatorId
 function mapMaintenanceFromBackend(backend: any): Maintenance {
   return {
     id: backend.id,
     elevatorId: backend.elevatorId || backend.elevator?.id || 0,
+    elevatorBuildingName: backend.elevatorBuildingName || backend.elevator?.buildingName || '',
     elevator: backend.elevator ? {
       id: backend.elevator.id,
       kimlikNo: backend.elevator.identityNumber || '',

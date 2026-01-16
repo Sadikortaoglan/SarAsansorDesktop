@@ -7,7 +7,7 @@ export interface Elevator {
   bina: string // Backend'den binaAdi olarak geliyor
   adres: string
   durak: string // Backend'den asansorNo olarak geliyor
-  maviEtiket?: string
+  blueLabel?: boolean
   maviEtiketTarihi: string
   bitisTarihi: string
   durum?: 'EXPIRED' | 'WARNING' | 'OK' // Frontend'de hesaplanacak
@@ -33,7 +33,7 @@ export interface CreateElevatorRequest {
   bina: string
   adres: string
   durak: string
-  maviEtiket: string
+  blueLabel: boolean
   maviEtiketTarihi: string
 }
 
@@ -61,7 +61,7 @@ function mapElevatorFromBackend(backend: any): Elevator {
     bina: backend.buildingName || '',
     adres: backend.address || '',
     durak: backend.elevatorNumber || '',
-    maviEtiket: backend.maviEtiket || '',
+    blueLabel: backend.blueLabel ?? backend.blue_label ?? false,
     maviEtiketTarihi: backend.inspectionDate || '',
     bitisTarihi: backend.bitisTarihi || '',
     durum,
@@ -108,13 +108,14 @@ export const elevatorService = {
   },
 
   create: async (elevator: CreateElevatorRequest): Promise<Elevator> => {
-    // Yeni backend field isimleri: identityNumber, buildingName, address, elevatorNumber, inspectionDate
+    // Yeni backend field isimleri: identityNumber, buildingName, address, elevatorNumber, inspectionDate, blueLabel
     const backendRequest: any = {
       identityNumber: elevator.kimlikNo,
       buildingName: elevator.bina,
       address: elevator.adres,
       elevatorNumber: elevator.durak,
       inspectionDate: elevator.maviEtiketTarihi,
+      blueLabel: elevator.blueLabel,
     }
     
     const { data } = await apiClient.post<ApiResponse<any>>('/elevators', backendRequest)
@@ -128,7 +129,7 @@ export const elevatorService = {
     if (elevator.bina !== undefined) backendRequest.buildingName = elevator.bina
     if (elevator.adres !== undefined) backendRequest.address = elevator.adres
     if (elevator.durak !== undefined) backendRequest.elevatorNumber = elevator.durak
-    if (elevator.maviEtiket !== undefined) backendRequest.maviEtiket = elevator.maviEtiket
+    if (elevator.blueLabel !== undefined) backendRequest.blueLabel = elevator.blueLabel
     if (elevator.maviEtiketTarihi !== undefined) backendRequest.inspectionDate = elevator.maviEtiketTarihi
     
     const { data } = await apiClient.put<ApiResponse<any>>(`/elevators/${id}`, backendRequest)

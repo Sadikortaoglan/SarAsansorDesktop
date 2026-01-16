@@ -147,7 +147,7 @@ export function ElevatorsPage() {
                 <TableHead>Bina</TableHead>
                 <TableHead>Adres</TableHead>
                 <TableHead>Durak</TableHead>
-                <TableHead>Mavi Etiket</TableHead>
+                <TableHead>Blue Label</TableHead>
                 <TableHead>Bitiş Tarihi</TableHead>
                 <TableHead>Durum</TableHead>
                 <TableHead className="text-right">İşlemler</TableHead>
@@ -174,7 +174,13 @@ export function ElevatorsPage() {
                     <TableCell>{elevator.bina}</TableCell>
                     <TableCell>{elevator.adres}</TableCell>
                     <TableCell>{elevator.durak}</TableCell>
-                    <TableCell>{elevator.maviEtiket}</TableCell>
+                    <TableCell>
+                      {elevator.blueLabel ? (
+                        <Badge variant="default">Yes</Badge>
+                      ) : (
+                        <Badge variant="secondary">No</Badge>
+                      )}
+                    </TableCell>
                     <TableCell>{formatDateShort(elevator.bitisTarihi)}</TableCell>
                     <TableCell>{getStatusBadge(elevator.durum)}</TableCell>
                     <TableCell className="text-right">
@@ -257,7 +263,7 @@ function ElevatorFormDialog({
     bina: '',
     adres: '',
     durak: '',
-    maviEtiket: '',
+    blueLabel: false,
     maviEtiketTarihi: '',
   })
   const { toast } = useToast()
@@ -270,7 +276,7 @@ function ElevatorFormDialog({
         bina: elevator.bina || '',
         adres: elevator.adres || '',
         durak: elevator.durak || '',
-        maviEtiket: elevator.maviEtiket || '',
+        blueLabel: elevator.blueLabel ?? false,
         maviEtiketTarihi: elevator.maviEtiketTarihi
           ? elevator.maviEtiketTarihi.split('T')[0]
           : '',
@@ -281,7 +287,7 @@ function ElevatorFormDialog({
         bina: '',
         adres: '',
         durak: '',
-        maviEtiket: '',
+        blueLabel: false,
         maviEtiketTarihi: '',
       })
     }
@@ -390,12 +396,18 @@ function ElevatorFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="maviEtiket">Mavi Etiket</Label>
-              <Input
-                id="maviEtiket"
-                value={formData.maviEtiket}
-                onChange={(e) => setFormData({ ...formData, maviEtiket: e.target.value })}
-              />
+              <div className="flex items-center space-x-2">
+                <input
+                  id="blueLabel"
+                  type="checkbox"
+                  checked={formData.blueLabel}
+                  onChange={(e) => setFormData({ ...formData, blueLabel: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <Label htmlFor="blueLabel" className="cursor-pointer">
+                  Blue Label
+                </Label>
+              </div>
             </div>
           </div>
           <div className="space-y-2">

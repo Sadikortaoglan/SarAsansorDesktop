@@ -136,8 +136,14 @@ export function ElevatorDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label className="text-muted-foreground">Mavi Etiket</Label>
-              <p className="text-lg font-medium">{elevator.maviEtiket || '-'}</p>
+              <Label className="text-muted-foreground">Blue Label</Label>
+              <p className="text-lg font-medium">
+                {elevator.blueLabel ? (
+                  <Badge variant="default">Yes</Badge>
+                ) : (
+                  <Badge variant="secondary">No</Badge>
+                )}
+              </p>
             </div>
             <div>
               <Label className="text-muted-foreground">Mavi Etiket Tarihi</Label>
