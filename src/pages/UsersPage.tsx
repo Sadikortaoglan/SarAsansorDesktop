@@ -274,13 +274,17 @@ function UserFormDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (user) {
-      const updateData: Partial<typeof formData> = { ...formData }
-      if (!formData.password) {
-        delete updateData.password
+      const updateData: Partial<typeof formData> = {
+        username: formData.username,
+        role: formData.role,
+        enabled: formData.enabled,
+      }
+      if (formData.password && formData.password.trim()) {
+        updateData.password = formData.password.trim()
       }
       updateMutation.mutate(updateData)
     } else {
-      if (!formData.password) {
+      if (!formData.password || !formData.password.trim()) {
         toast({
           title: 'Hata',
           description: 'Şifre gerekli.',
@@ -288,7 +292,10 @@ function UserFormDialog({
         })
         return
       }
-      createMutation.mutate(formData)
+      createMutation.mutate({
+        ...formData,
+        password: formData.password.trim(),
+      })
     }
   }
 

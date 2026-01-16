@@ -5,7 +5,8 @@ export interface User {
   id: number
   username: string
   role: 'PATRON' | 'PERSONEL'
-  enabled: boolean
+  enabled?: boolean
+  active?: boolean
 }
 
 export interface CreateUserRequest {
@@ -21,11 +22,23 @@ export interface UpdateUserRequest {
   enabled?: boolean
 }
 
+function mapUserFromBackend(backend: any): User {
+  const isActive = backend.active ?? backend.enabled ?? true
+  return {
+    id: backend.id,
+    username: backend.username || '',
+    role: backend.role || 'PERSONEL',
+    enabled: isActive,
+    active: isActive,
+  }
+}
+
 export const userService = {
   getAll: async (): Promise<User[]> => {
     try {
-      const { data } = await apiClient.get<ApiResponse<User[]>>('/users')
-      return unwrapArrayResponse(data, true)
+      const { data } = await apiClient.get<ApiResponse<any[]>>('/users')
+      const unwrapped = unwrapArrayResponse(data, true)
+      return Array.isArray(unwrapped) ? unwrapped.map(mapUserFromBackend) : []
     } catch (error: any) {
       if (error.response?.status === 404 || error.response?.data?.success === false) {
         return []
@@ -35,18 +48,32 @@ export const userService = {
   },
 
   getById: async (id: number): Promise<User> => {
-    const { data } = await apiClient.get<ApiResponse<User>>(`/users/${id}`)
-    return unwrapResponse(data)
+    const { data } = await apiClient.get<ApiResponse<any>>(`/users/${id}`)
+    const unwrapped = unwrapResponse(data)
+    return mapUserFromBackend(unwrapped)
   },
 
   create: async (user: CreateUserRequest): Promise<User> => {
-    const { data } = await apiClient.post<ApiResponse<User>>('/users', user)
-    return unwrapResponse(data)
+    const { data } = await apiClient.post<ApiResponse<any>>('/users', user)
+    const unwrapped = unwrapResponse(data)
+    return mapUserFromBackend(unwrapped)
   },
 
   update: async (id: number, user: UpdateUserRequest): Promise<User> => {
-    const { data } = await apiClient.put<ApiResponse<User>>(`/users/${id}`, user)
-    return unwrapResponse(data)
+    const backendRequest: any = {}
+    if (user.username !== undefined) backendRequest.username = user.username
+    if (user.password !== undefined && user.password.trim()) {
+      backendRequest.password = user.password.trim()
+    }
+    if (user.role !== undefined) backendRequest.role = user.role
+    if (user.enabled !== undefined) {
+      backendRequest.enabled = user.enabled
+      backendRequest.active = user.enabled
+    }
+    
+    const { data } = await apiClient.put<ApiResponse<any>>(`/users/${id}`, backendRequest)
+    const unwrapped = unwrapResponse(data)
+    return mapUserFromBackend(unwrapped)
   },
 
   delete: async (id: number): Promise<void> => {
