@@ -1,10 +1,12 @@
 import apiClient from '@/lib/api'
 import { unwrapResponse, unwrapArrayResponse, type ApiResponse } from '@/lib/api-response'
 
-// Backend field isimleri: tarih (denetimTarihi), sonuc: BAŞARILI/BAŞARISIZ/BEKLENİYOR
+// Backend field isimleri: elevatorIdentityNumber, elevatorBuildingName, date, result, description
 export interface Inspection {
   id: number
   elevatorId: number
+  elevatorIdentityNumber: string
+  elevatorBuildingName: string
   elevator?: {
     id: number
     kimlikNo: string
@@ -12,7 +14,7 @@ export interface Inspection {
     binaAdi?: string
     adres: string
   }
-  denetimTarihi: string // Backend'den tarih olarak geliyor
+  denetimTarihi: string // Backend'den date olarak geliyor
   denetimYapan?: string // Backend'de yok gibi görünüyor
   sonuc: 'PASS' | 'FAIL' | 'PENDING' // Backend: BAŞARILI/BAŞARISIZ/BEKLENİYOR
   aciklama?: string
@@ -51,16 +53,18 @@ function mapInspectionResultToBackend(result: 'PASS' | 'FAIL' | 'PENDING'): stri
 
 // Backend'den gelen formatı frontend formatına çevir
 // YENİ BACKEND FIELD İSİMLERİ (eski field'lar KULLANILMIYOR):
-// date, result, description
+// elevatorIdentityNumber, elevatorBuildingName, date, result, description
 function mapInspectionFromBackend(backend: any): Inspection {
   return {
     id: backend.id,
-    elevatorId: backend.elevatorId || backend.elevator?.id,
+    elevatorId: backend.elevatorId || backend.elevator?.id || 0,
+    elevatorIdentityNumber: backend.elevatorIdentityNumber || backend.elevator?.identityNumber || '',
+    elevatorBuildingName: backend.elevatorBuildingName || backend.elevator?.buildingName || '',
     elevator: backend.elevator ? {
       id: backend.elevator.id,
-      kimlikNo: backend.elevator.identityNumber || '',
-      bina: backend.elevator.buildingName || '',
-      binaAdi: backend.elevator.buildingName,
+      kimlikNo: backend.elevator.identityNumber || backend.elevatorIdentityNumber || '',
+      bina: backend.elevator.buildingName || backend.elevatorBuildingName || '',
+      binaAdi: backend.elevator.buildingName || backend.elevatorBuildingName,
       adres: backend.elevator.address || '',
     } : undefined,
     denetimTarihi: backend.date || '',

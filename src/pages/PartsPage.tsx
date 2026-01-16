@@ -304,7 +304,7 @@ function PartFormDialog({
   }
 
   return (
-    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-h-[85vh]">
+    <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{part ? 'Parça Düzenle' : 'Yeni Parça Ekle'}</DialogTitle>
         <DialogDescription>
@@ -320,6 +320,7 @@ function PartFormDialog({
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
+              className="w-full"
             />
           </div>
           <div className="space-y-2">
@@ -328,6 +329,7 @@ function PartFormDialog({
               id="description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="w-full"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -340,6 +342,7 @@ function PartFormDialog({
                 value={formData.stockLevel}
                 onChange={(e) => setFormData({ ...formData, stockLevel: Number(e.target.value) })}
                 required
+                className="w-full"
               />
             </div>
             <div className="space-y-2">
@@ -352,15 +355,16 @@ function PartFormDialog({
                 value={formData.unitPrice}
                 onChange={(e) => setFormData({ ...formData, unitPrice: Number(e.target.value) })}
                 required
+                className="w-full"
               />
             </div>
           </div>
         </div>
         <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
-          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
+          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto min-h-[44px]">
             İptal
           </Button>
-          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="w-full sm:w-auto">
+          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
             {part ? 'Güncelle' : 'Ekle'}
           </Button>
         </DialogFooter>

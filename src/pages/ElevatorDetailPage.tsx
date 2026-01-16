@@ -5,14 +5,7 @@ import { elevatorService } from '@/services/elevator.service'
 import { maintenanceService } from '@/services/maintenance.service'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { TableResponsive } from '@/components/ui/table-responsive'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
@@ -105,7 +98,7 @@ export function ElevatorDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Genel Bilgiler</CardTitle>
@@ -190,53 +183,76 @@ export function ElevatorDetailPage() {
               ))}
             </div>
           ) : maintenances && maintenances.length > 0 ? (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tarih</TableHead>
-                    <TableHead>Açıklama</TableHead>
-                    <TableHead>Ücret</TableHead>
-                    <TableHead>Ödendi</TableHead>
-                    <TableHead>Ödeme Tarihi</TableHead>
-                    <TableHead className="text-right">İşlemler</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {maintenances.map((maintenance) => (
-                    <TableRow key={maintenance.id}>
-                      <TableCell>{formatDateShort(maintenance.tarih)}</TableCell>
-                      <TableCell>{maintenance.aciklama}</TableCell>
-                      <TableCell>{formatCurrency(maintenance.ucret)}</TableCell>
-                      <TableCell>
-                        {maintenance.odendi ? (
-                          <Badge variant="success">Ödendi</Badge>
-                        ) : (
-                          <Badge variant="destructive">Ödenmedi</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {maintenance.odemeTarihi ? formatDateShort(maintenance.odemeTarihi || '') : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setMaintenanceToDelete(maintenance.id)
-                              setConfirmDeleteOpen(true)
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <TableResponsive
+              data={maintenances}
+              columns={[
+                {
+                  key: 'tarih',
+                  header: 'Tarih',
+                  mobileLabel: 'Tarih',
+                  mobilePriority: 10,
+                  render: (maintenance) => formatDateShort(maintenance.tarih),
+                },
+                {
+                  key: 'aciklama',
+                  header: 'Açıklama',
+                  mobileLabel: 'Açıklama',
+                  mobilePriority: 9,
+                },
+                {
+                  key: 'ucret',
+                  header: 'Ücret',
+                  mobileLabel: 'Ücret',
+                  mobilePriority: 8,
+                  render: (maintenance) => formatCurrency(maintenance.ucret),
+                },
+                {
+                  key: 'odendi',
+                  header: 'Ödendi',
+                  mobileLabel: 'Ödendi',
+                  mobilePriority: 7,
+                  render: (maintenance) =>
+                    maintenance.odendi ? (
+                      <Badge variant="success">Ödendi</Badge>
+                    ) : (
+                      <Badge variant="destructive">Ödenmedi</Badge>
+                    ),
+                },
+                {
+                  key: 'odemeTarihi',
+                  header: 'Ödeme Tarihi',
+                  mobileLabel: 'Ödeme Tarihi',
+                  mobilePriority: 6,
+                  hideOnMobile: true,
+                  render: (maintenance) =>
+                    maintenance.odemeTarihi ? formatDateShort(maintenance.odemeTarihi || '') : '-',
+                },
+                {
+                  key: 'actions',
+                  header: 'İşlemler',
+                  mobileLabel: '',
+                  mobilePriority: 1,
+                  hideOnMobile: false,
+                  render: (maintenance) => (
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setMaintenanceToDelete(maintenance.id)
+                          setConfirmDeleteOpen(true)
+                        }}
+                        className="h-11 w-11 sm:h-10 sm:w-10"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+              keyExtractor={(maintenance) => maintenance.id.toString()}
+              emptyMessage="Henüz bakım kaydı yok"
+            />
           ) : (
             <p className="text-center text-muted-foreground">Henüz bakım kaydı yok</p>
           )}
@@ -302,7 +318,7 @@ function MaintenanceFormDialog({
   }
 
   return (
-    <DialogContent>
+    <DialogContent className="w-[95vw] max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Yeni Bakım Ekle</DialogTitle>
         <DialogDescription>Bakım bilgilerini girin</DialogDescription>
@@ -317,6 +333,7 @@ function MaintenanceFormDialog({
               value={formData.tarih}
               onChange={(e) => setFormData({ ...formData, tarih: e.target.value })}
               required
+              className="w-full"
             />
           </div>
           <div className="space-y-2">
@@ -326,6 +343,7 @@ function MaintenanceFormDialog({
               value={formData.aciklama}
               onChange={(e) => setFormData({ ...formData, aciklama: e.target.value })}
               required
+              className="w-full"
             />
           </div>
           <div className="space-y-2">
@@ -337,11 +355,15 @@ function MaintenanceFormDialog({
               value={formData.ucret}
               onChange={(e) => setFormData({ ...formData, ucret: Number(e.target.value) })}
               required
+              className="w-full"
             />
           </div>
         </div>
         <DialogFooter>
-          <Button type="submit" disabled={createMutation.isPending}>
+          <Button type="button" variant="outline" onClick={() => {}} className="w-full sm:w-auto min-h-[44px] hidden">
+            İptal
+          </Button>
+          <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
             Ekle
           </Button>
         </DialogFooter>

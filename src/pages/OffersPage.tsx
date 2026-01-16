@@ -435,7 +435,7 @@ function OfferFormDialog({
   const totalAmount = afterDiscount + vatAmount
 
   return (
-    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-h-[85vh]">
+    <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{offer ? 'Teklif Düzenle' : 'Yeni Teklif Oluştur'}</DialogTitle>
         <DialogDescription>
@@ -452,7 +452,7 @@ function OfferFormDialog({
                 onValueChange={(value) => setFormData({ ...formData, elevatorId: value })}
                 required
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Asansör seçin" />
                 </SelectTrigger>
                 <SelectContent>
@@ -472,6 +472,7 @@ function OfferFormDialog({
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 required
+                className="w-full"
               />
             </div>
           </div>
@@ -487,6 +488,7 @@ function OfferFormDialog({
                 value={formData.vatRate}
                 onChange={(e) => setFormData({ ...formData, vatRate: Number(e.target.value) })}
                 required
+                className="w-full"
               />
             </div>
             <div className="space-y-2">
@@ -498,6 +500,7 @@ function OfferFormDialog({
                 min="0"
                 value={formData.discountAmount}
                 onChange={(e) => setFormData({ ...formData, discountAmount: Number(e.target.value) })}
+                className="w-full"
               />
             </div>
             <div className="space-y-2">
@@ -508,7 +511,7 @@ function OfferFormDialog({
                   setFormData({ ...formData, status: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -545,7 +548,7 @@ function OfferFormDialog({
                 className="w-full sm:w-24"
                 min="1"
               />
-              <Button type="button" onClick={handleAddItem} className="w-full sm:w-auto">
+              <Button type="button" onClick={handleAddItem} className="w-full sm:w-auto min-h-[44px]">
                 Ekle
               </Button>
             </div>
@@ -611,10 +614,10 @@ function OfferFormDialog({
           </div>
         </div>
         <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
-          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
+          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto min-h-[44px]">
             İptal
           </Button>
-          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="w-full sm:w-auto">
+          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
             {offer ? 'Güncelle' : 'Oluştur'}
           </Button>
         </DialogFooter>
@@ -633,7 +636,7 @@ function OfferDetailDialog({ offer }: { offer: Offer }) {
   const status = statusMap[offer.status] || { label: offer.status, variant: 'default' as const }
 
   return (
-    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Teklif Detayı #{offer.id}</DialogTitle>
         <DialogDescription>

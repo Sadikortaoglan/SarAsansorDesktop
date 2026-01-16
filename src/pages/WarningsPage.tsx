@@ -152,18 +152,18 @@ export function WarningsPage() {
                               <ChevronRight className="h-4 w-4 text-red-600" />
                             )}
                           </div>
-                          <div className="flex-1 grid grid-cols-4 gap-4">
+                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-2 sm:gap-4">
                             <div>
-                              <p className="font-medium text-red-900">{warning.buildingName}</p>
+                              <p className="font-medium text-red-900 text-sm sm:text-base">{warning.buildingName}</p>
                             </div>
                             <div>
-                              <p className="text-sm text-muted-foreground">{warning.address}</p>
+                              <p className="text-xs sm:text-sm text-muted-foreground">{warning.address}</p>
                             </div>
                             <div>
-                              <Badge variant="expired">Süresi Geçti</Badge>
+                              <Badge variant="expired" className="text-xs">Süresi Geçti</Badge>
                             </div>
                             <div>
-                              <p className="text-sm text-muted-foreground">
+                              <p className="text-xs sm:text-sm text-muted-foreground">
                                 {elevatorCount} {elevatorCount === 1 ? 'asansör' : 'asansör'}
                               </p>
                             </div>
@@ -199,7 +199,7 @@ export function WarningsPage() {
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="h-8 w-8 cursor-pointer hover:bg-red-100 transition-colors"
+                                          className="h-11 w-11 sm:h-10 sm:w-10 min-h-[44px] min-w-[44px] cursor-pointer hover:bg-red-100 transition-colors"
                                           onClick={(e) => {
                                             e.stopPropagation()
                                             handleViewElevator(elevator.identityNo)
@@ -264,18 +264,18 @@ export function WarningsPage() {
                               <ChevronRight className="h-4 w-4 text-orange-600" />
                             )}
                           </div>
-                          <div className="flex-1 grid grid-cols-4 gap-4">
+                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-2 sm:gap-4">
                             <div>
-                              <p className="font-medium text-orange-900">{warning.buildingName}</p>
+                              <p className="font-medium text-orange-900 text-sm sm:text-base">{warning.buildingName}</p>
                             </div>
                             <div>
-                              <p className="text-sm text-muted-foreground">{warning.address}</p>
+                              <p className="text-xs sm:text-sm text-muted-foreground">{warning.address}</p>
                             </div>
                             <div>
-                              <Badge variant="warning">30 Gün Kaldı</Badge>
+                              <Badge variant="warning" className="text-xs">30 Gün Kaldı</Badge>
                             </div>
                             <div>
-                              <p className="text-sm text-muted-foreground">
+                              <p className="text-xs sm:text-sm text-muted-foreground">
                                 {elevatorCount} {elevatorCount === 1 ? 'asansör' : 'asansör'}
                               </p>
                             </div>
@@ -311,7 +311,7 @@ export function WarningsPage() {
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="h-8 w-8 cursor-pointer hover:bg-orange-100 transition-colors"
+                                          className="h-11 w-11 sm:h-10 sm:w-10 min-h-[44px] min-w-[44px] cursor-pointer hover:bg-orange-100 transition-colors"
                                           onClick={(e) => {
                                             e.stopPropagation()
                                             handleViewElevator(elevator.identityNo)

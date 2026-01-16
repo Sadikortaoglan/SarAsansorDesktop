@@ -38,12 +38,12 @@ export function ConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="w-[95vw] max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div
               className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-full',
+                'flex h-10 w-10 min-h-[44px] min-w-[44px] sm:h-10 sm:w-10 sm:min-h-0 sm:min-w-0 items-center justify-center rounded-full',
                 variant === 'destructive'
                   ? 'bg-destructive/10 text-destructive'
                   : 'bg-primary/10 text-primary'
@@ -51,10 +51,10 @@ export function ConfirmDialog({
             >
               <AlertTriangle className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-xl font-semibold">{title}</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl font-semibold">{title}</DialogTitle>
           </div>
         </DialogHeader>
-        <DialogDescription className="pt-2 text-base leading-relaxed text-foreground">
+        <DialogDescription className="pt-2 text-sm sm:text-base leading-relaxed text-foreground">
           {message}
         </DialogDescription>
         <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -62,7 +62,7 @@ export function ConfirmDialog({
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto min-h-[44px]"
           >
             {cancelText}
           </Button>
@@ -70,7 +70,7 @@ export function ConfirmDialog({
             type="button"
             variant={variant}
             onClick={handleConfirm}
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto min-h-[44px]"
           >
             {confirmText}
           </Button>

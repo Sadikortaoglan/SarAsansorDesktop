@@ -3,14 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { userService, type User } from '@/services/user.service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { TableResponsive } from '@/components/ui/table-responsive'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
@@ -126,75 +119,84 @@ export function UsersPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Kullanıcı Adı</TableHead>
-                <TableHead>Rol</TableHead>
-                <TableHead>Durum</TableHead>
-                <TableHead className="text-right">İşlemler</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {usersArray.length > 0 ? (
-                usersArray.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.username}</TableCell>
-                    <TableCell>
-                      <Badge variant={user.role === 'PATRON' ? 'default' : 'secondary'}>
-                        {user.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={user.enabled ? 'success' : 'destructive'}>
-                        {user.enabled ? 'Aktif' : 'Pasif'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setSelectedUser(user)
-                            setIsDialogOpen(true)
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {isLastActivePatron(user) ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled
-                            title="En az bir aktif PATRON bulunmalıdır."
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(user.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
-                    Kullanıcı bulunamadı
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <TableResponsive
+          data={usersArray}
+          columns={[
+            {
+              key: 'username',
+              header: 'Kullanıcı Adı',
+              mobileLabel: 'Kullanıcı Adı',
+              mobilePriority: 10,
+              render: (user: User) => <span className="font-medium">{user.username}</span>,
+            },
+            {
+              key: 'role',
+              header: 'Rol',
+              mobileLabel: 'Rol',
+              mobilePriority: 9,
+              render: (user: User) => (
+                <Badge variant={user.role === 'PATRON' ? 'default' : 'secondary'}>
+                  {user.role}
+                </Badge>
+              ),
+            },
+            {
+              key: 'enabled',
+              header: 'Durum',
+              mobileLabel: 'Durum',
+              mobilePriority: 8,
+              render: (user: User) => (
+                <Badge variant={user.enabled ? 'success' : 'destructive'}>
+                  {user.enabled ? 'Aktif' : 'Pasif'}
+                </Badge>
+              ),
+            },
+            {
+              key: 'actions',
+              header: 'İşlemler',
+              mobileLabel: '',
+              mobilePriority: 1,
+              hideOnMobile: false,
+              render: (user: User) => (
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setSelectedUser(user)
+                      setIsDialogOpen(true)
+                    }}
+                    className="h-11 w-11 sm:h-10 sm:w-10"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  {isLastActivePatron(user) ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled
+                      title="En az bir aktif PATRON bulunmalıdır."
+                      className="h-11 w-11 sm:h-10 sm:w-10"
+                    >
+                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(user.id)}
+                      className="h-11 w-11 sm:h-10 sm:w-10"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              ),
+            },
+          ]}
+          keyExtractor={(user) => user.id.toString()}
+          emptyMessage="Kullanıcı bulunamadı"
+        />
       )}
 
       <ConfirmDialog
@@ -320,7 +322,7 @@ function UserFormDialog({
   }
 
   return (
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{user ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı Ekle'}</DialogTitle>
         <DialogDescription>
@@ -336,6 +338,7 @@ function UserFormDialog({
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
               required
+              className="w-full"
             />
           </div>
           <div className="space-y-2">
@@ -346,9 +349,10 @@ function UserFormDialog({
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               required={!user}
+              className="w-full"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="role">Rol *</Label>
               <Select
@@ -357,7 +361,7 @@ function UserFormDialog({
                   setFormData({ ...formData, role: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -386,6 +390,7 @@ function UserFormDialog({
                   })()}
                 >
                   <SelectTrigger 
+                    className="w-full"
                     title={(() => {
                       const activePatrons = usersArray.filter(u => 
                         u.role === 'PATRON' && 
@@ -412,10 +417,10 @@ function UserFormDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto min-h-[44px]">
             İptal
           </Button>
-          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
             {user ? 'Güncelle' : 'Ekle'}
           </Button>
         </DialogFooter>

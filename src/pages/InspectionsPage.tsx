@@ -4,14 +4,7 @@ import { inspectionService } from '@/services/inspection.service'
 import { elevatorService } from '@/services/elevator.service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { TableResponsive } from '@/components/ui/table-responsive'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
@@ -49,8 +42,8 @@ export function InspectionsPage() {
   const inspectionsArray = Array.isArray(inspections) ? inspections : []
   const filteredInspections = inspectionsArray.filter(
     (inspection) =>
-      inspection.elevator?.kimlikNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (inspection.elevator?.bina || inspection.elevator?.binaAdi)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      inspection.elevatorIdentityNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      inspection.elevatorBuildingName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       inspection.denetimYapan?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -127,47 +120,61 @@ export function InspectionsPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Asansör</TableHead>
-                <TableHead>Bina</TableHead>
-                <TableHead>Denetim Tarihi</TableHead>
-                <TableHead>Denetim Yapan</TableHead>
-                <TableHead>Sonuç</TableHead>
-                <TableHead>Rapor No</TableHead>
-                <TableHead>Açıklama</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInspections && filteredInspections.length > 0 ? (
-                filteredInspections.map((inspection) => (
-                  <TableRow key={inspection.id}>
-                    <TableCell className="font-medium">
-                      {inspection.elevator?.kimlikNo || '-'}
-                    </TableCell>
-                    <TableCell>{inspection.elevator?.bina || inspection.elevator?.binaAdi || '-'}</TableCell>
-                    <TableCell>{formatDateShort(inspection.denetimTarihi)}</TableCell>
-                    <TableCell>{inspection.denetimYapan || '-'}</TableCell>
-                    <TableCell>{getResultBadge(inspection.sonuc)}</TableCell>
-                    <TableCell>{inspection.raporNo || '-'}</TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {inspection.aciklama || '-'}
-                    </TableCell>
-                    {/* İşlemler butonları kaldırıldı - Backend'de update/delete endpoint'leri yok */}
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
-                    Denetim bulunamadı
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <TableResponsive
+          data={filteredInspections}
+          columns={[
+            {
+              key: 'elevatorIdentityNumber',
+              header: 'Asansör',
+              mobileLabel: 'Asansör',
+              mobilePriority: 10,
+              render: (inspection) => <span className="font-medium">{inspection.elevatorIdentityNumber || '-'}</span>,
+            },
+            {
+              key: 'elevatorBuildingName',
+              header: 'Bina',
+              mobileLabel: 'Bina',
+              mobilePriority: 9,
+            },
+            {
+              key: 'denetimTarihi',
+              header: 'Denetim Tarihi',
+              mobileLabel: 'Denetim Tarihi',
+              mobilePriority: 8,
+              render: (inspection) => formatDateShort(inspection.denetimTarihi),
+            },
+            {
+              key: 'denetimYapan',
+              header: 'Denetim Yapan',
+              mobileLabel: 'Denetim Yapan',
+              mobilePriority: 7,
+              hideOnMobile: true,
+            },
+            {
+              key: 'sonuc',
+              header: 'Sonuç',
+              mobileLabel: 'Sonuç',
+              mobilePriority: 6,
+              render: (inspection) => getResultBadge(inspection.sonuc),
+            },
+            {
+              key: 'raporNo',
+              header: 'Rapor No',
+              mobileLabel: 'Rapor No',
+              mobilePriority: 5,
+              hideOnMobile: true,
+            },
+            {
+              key: 'aciklama',
+              header: 'Açıklama',
+              mobileLabel: 'Açıklama',
+              mobilePriority: 4,
+              render: (inspection) => <span className="max-w-xs truncate block">{inspection.aciklama || '-'}</span>,
+            },
+          ]}
+          keyExtractor={(inspection) => inspection.id.toString()}
+          emptyMessage="Denetim bulunamadı"
+        />
       )}
     </div>
   )
@@ -245,10 +252,10 @@ function InspectionFormDialog({
   }
 
   return (
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Yeni Denetim Ekle</DialogTitle>
-        <DialogDescription>Yeni denetim bilgilerini girin (Backend'de update endpoint'i yok, sadece ekleme yapılabilir)</DialogDescription>
+        <DialogDescription>Yeni denetim bilgilerini girin</DialogDescription>
       </DialogHeader>
       <form onSubmit={handleSubmit}>
         <div className="grid gap-4 py-4">
@@ -258,7 +265,7 @@ function InspectionFormDialog({
               value={formData.elevatorId}
               onValueChange={(value) => setFormData({ ...formData, elevatorId: value })}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Asansör seçin" />
               </SelectTrigger>
               <SelectContent>
@@ -270,7 +277,7 @@ function InspectionFormDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="denetimTarihi">Denetim Tarihi *</Label>
               <Input
@@ -279,6 +286,7 @@ function InspectionFormDialog({
                 value={formData.denetimTarihi}
                 onChange={(e) => setFormData({ ...formData, denetimTarihi: e.target.value })}
                 required
+                className="w-full"
               />
             </div>
             <div className="space-y-2">
@@ -289,7 +297,7 @@ function InspectionFormDialog({
                   setFormData({ ...formData, sonuc: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -300,22 +308,21 @@ function InspectionFormDialog({
               </Select>
             </div>
           </div>
-          {/* denetimYapan ve raporNo backend'de yok, form'da gösterilmiyor */}
-          {/* Ancak backend'den gelen verilerde varsa gösterilebilir */}
           <div className="space-y-2">
             <Label htmlFor="aciklama">Açıklama</Label>
             <Input
               id="aciklama"
               value={formData.aciklama}
               onChange={(e) => setFormData({ ...formData, aciklama: e.target.value })}
+              className="w-full"
             />
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto min-h-[44px]">
             İptal
           </Button>
-          <Button type="submit" disabled={createMutation.isPending}>
+          <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
             Ekle
           </Button>
         </DialogFooter>

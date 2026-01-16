@@ -4,14 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { elevatorService, type Elevator } from '@/services/elevator.service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { TableResponsive } from '@/components/ui/table-responsive'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
@@ -139,100 +132,127 @@ export function ElevatorsPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Kimlik No</TableHead>
-                <TableHead>Bina</TableHead>
-                <TableHead>Adres</TableHead>
-                <TableHead>Durak</TableHead>
-                <TableHead>Blue Label</TableHead>
-                <TableHead>Bitiş Tarihi</TableHead>
-                <TableHead>Durum</TableHead>
-                <TableHead className="text-right">İşlemler</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredElevators && filteredElevators.length > 0 ? (
-                filteredElevators.map((elevator) => {
-                  if (!elevator.durum) {
-                    const today = new Date()
-                    const bitisTarihi = new Date(elevator.bitisTarihi)
-                    const daysUntilExpiry = Math.ceil((bitisTarihi.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-                    if (daysUntilExpiry < 0) {
-                      elevator.durum = 'EXPIRED'
-                    } else if (daysUntilExpiry <= 30) {
-                      elevator.durum = 'WARNING'
-                    } else {
-                      elevator.durum = 'OK'
-                    }
-                  }
-                  return (
-                  <TableRow key={elevator.id}>
-                    <TableCell className="font-medium">{elevator.kimlikNo}</TableCell>
-                    <TableCell>{elevator.bina}</TableCell>
-                    <TableCell>{elevator.adres}</TableCell>
-                    <TableCell>{elevator.durak}</TableCell>
-                    <TableCell>
-                      {elevator.blueLabel ? (
-                        <Badge variant="default">Yes</Badge>
-                      ) : (
-                        <Badge variant="secondary">No</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>{formatDateShort(elevator.bitisTarihi)}</TableCell>
-                    <TableCell>{getStatusBadge(elevator.durum)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => navigate(`/elevators/${elevator.id}`)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={async () => {
-                            try {
-                              const freshElevator = await elevatorService.getById(elevator.id)
-                              setSelectedElevator(freshElevator)
-                              setIsDialogOpen(true)
-                            } catch (error) {
-                              toast({
-                                title: 'Hata',
-                                description: 'Asansör bilgileri yüklenirken bir hata oluştu.',
-                                variant: 'destructive',
-                              })
-                            }
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(elevator.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  )
-                })
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
-                    Asansör bulunamadı
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <TableResponsive
+          data={filteredElevators.map((elevator) => {
+            if (!elevator.durum) {
+              const today = new Date()
+              const bitisTarihi = new Date(elevator.bitisTarihi)
+              const daysUntilExpiry = Math.ceil((bitisTarihi.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+              if (daysUntilExpiry < 0) {
+                elevator.durum = 'EXPIRED'
+              } else if (daysUntilExpiry <= 30) {
+                elevator.durum = 'WARNING'
+              } else {
+                elevator.durum = 'OK'
+              }
+            }
+            return elevator
+          })}
+          columns={[
+            {
+              key: 'kimlikNo',
+              header: 'Kimlik No',
+              mobileLabel: 'Kimlik No',
+              mobilePriority: 10,
+              render: (elevator: Elevator) => <span className="font-medium">{elevator.kimlikNo}</span>,
+            },
+            {
+              key: 'bina',
+              header: 'Bina',
+              mobileLabel: 'Bina',
+              mobilePriority: 9,
+            },
+            {
+              key: 'adres',
+              header: 'Adres',
+              mobileLabel: 'Adres',
+              mobilePriority: 8,
+              hideOnMobile: true,
+            },
+            {
+              key: 'durak',
+              header: 'Durak',
+              mobileLabel: 'Durak',
+              mobilePriority: 7,
+              hideOnMobile: true,
+            },
+            {
+              key: 'blueLabel',
+              header: 'Blue Label',
+              mobileLabel: 'Blue Label',
+              mobilePriority: 6,
+              render: (elevator: Elevator) =>
+                elevator.blueLabel ? (
+                  <Badge variant="default">Yes</Badge>
+                ) : (
+                  <Badge variant="secondary">No</Badge>
+                ),
+            },
+            {
+              key: 'bitisTarihi',
+              header: 'Bitiş Tarihi',
+              mobileLabel: 'Bitiş Tarihi',
+              mobilePriority: 5,
+              render: (elevator: Elevator) => formatDateShort(elevator.bitisTarihi),
+            },
+            {
+              key: 'durum',
+              header: 'Durum',
+              mobileLabel: 'Durum',
+              mobilePriority: 4,
+              render: (elevator: Elevator) => getStatusBadge(elevator.durum || 'OK'),
+            },
+            {
+              key: 'actions',
+              header: 'İşlemler',
+              mobileLabel: '',
+              mobilePriority: 1,
+              hideOnMobile: false,
+              render: (elevator: Elevator) => (
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => navigate(`/elevators/${elevator.id}`)}
+                    className="h-11 w-11 sm:h-10 sm:w-10"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={async () => {
+                      try {
+                        const freshElevator = await elevatorService.getById(elevator.id)
+                        setSelectedElevator(freshElevator)
+                        setIsDialogOpen(true)
+                      } catch (error) {
+                        toast({
+                          title: 'Hata',
+                          description: 'Asansör bilgileri yüklenirken bir hata oluştu.',
+                          variant: 'destructive',
+                        })
+                      }
+                    }}
+                    className="h-11 w-11 sm:h-10 sm:w-10"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDelete(elevator.id)}
+                    className="h-11 w-11 sm:h-10 sm:w-10"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ),
+            },
+          ]}
+          keyExtractor={(elevator) => String(elevator.id)}
+          emptyMessage="Asansör bulunamadı"
+        />
       )}
 
       <ConfirmDialog
@@ -348,7 +368,7 @@ function ElevatorFormDialog({
   }
 
   return (
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{elevator ? 'Asansör Düzenle' : 'Yeni Asansör Ekle'}</DialogTitle>
         <DialogDescription>
@@ -357,7 +377,7 @@ function ElevatorFormDialog({
       </DialogHeader>
       <form onSubmit={handleSubmit}>
         <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="kimlikNo">Kimlik No *</Label>
               <Input
@@ -365,6 +385,7 @@ function ElevatorFormDialog({
                 value={formData.kimlikNo}
                 onChange={(e) => setFormData({ ...formData, kimlikNo: e.target.value })}
                 required
+                className="w-full"
               />
             </div>
             <div className="space-y-2">
@@ -374,6 +395,7 @@ function ElevatorFormDialog({
                 value={formData.bina}
                 onChange={(e) => setFormData({ ...formData, bina: e.target.value })}
                 required
+                className="w-full"
               />
             </div>
           </div>
@@ -384,27 +406,30 @@ function ElevatorFormDialog({
               value={formData.adres}
               onChange={(e) => setFormData({ ...formData, adres: e.target.value })}
               required
+              className="w-full"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="durak">Durak</Label>
               <Input
                 id="durak"
                 value={formData.durak}
                 onChange={(e) => setFormData({ ...formData, durak: e.target.value })}
+                className="w-full"
               />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center space-x-2">
+              <Label htmlFor="blueLabel">Blue Label</Label>
+              <div className="flex items-center space-x-2 pt-2">
                 <input
                   id="blueLabel"
                   type="checkbox"
                   checked={formData.blueLabel}
                   onChange={(e) => setFormData({ ...formData, blueLabel: e.target.checked })}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
                 />
-                <Label htmlFor="blueLabel" className="cursor-pointer">
+                <Label htmlFor="blueLabel" className="cursor-pointer text-sm">
                   Blue Label
                 </Label>
               </div>
@@ -418,14 +443,15 @@ function ElevatorFormDialog({
               value={formData.maviEtiketTarihi}
               onChange={(e) => setFormData({ ...formData, maviEtiketTarihi: e.target.value })}
               required
+              className="w-full"
             />
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto min-h-[44px]">
             İptal
           </Button>
-          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
             {elevator ? 'Güncelle' : 'Ekle'}
           </Button>
         </DialogFooter>

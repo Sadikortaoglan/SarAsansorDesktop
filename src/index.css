@@ -33,6 +33,50 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  
+  /* Mobile typography improvements */
+  @media (max-width: 768px) {
+    body {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    
+    h1 {
+      font-size: 1.75rem;
+      line-height: 1.3;
+    }
+    
+    h2 {
+      font-size: 1.5rem;
+      line-height: 1.3;
+    }
+    
+    h3 {
+      font-size: 1.25rem;
+      line-height: 1.4;
+    }
+    
+    p {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+  }
+  
+  /* Prevent horizontal scroll */
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  
+  /* Touch-friendly spacing */
+  @media (max-width: 768px) {
+    button, a {
+      min-height: 44px;
+      min-width: 44px;
+    }
   }
 }
 

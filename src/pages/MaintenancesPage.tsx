@@ -3,14 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { maintenanceService, type Maintenance } from '@/services/maintenance.service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { TableResponsive } from '@/components/ui/table-responsive'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -107,7 +100,7 @@ export function MaintenancesPage() {
       </div>
 
       {summary && (
-        <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">Toplam Bakım</CardTitle>
@@ -169,7 +162,7 @@ export function MaintenancesPage() {
           <CardDescription>Tarih aralığı ve ödeme durumu filtresi</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-2">
               <Label htmlFor="dateFrom">Başlangıç Tarihi</Label>
               <Input
@@ -177,6 +170,7 @@ export function MaintenancesPage() {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full"
               />
             </div>
             <div className="space-y-2">
@@ -186,12 +180,13 @@ export function MaintenancesPage() {
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
+                className="w-full"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="paidFilter">Ödeme Durumu</Label>
               <Select value={paidFilter} onValueChange={(value: 'all' | 'paid' | 'unpaid') => setPaidFilter(value)}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -208,7 +203,7 @@ export function MaintenancesPage() {
                 placeholder="Bina, asansör veya açıklama ile ara..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
+                className="pl-9 w-full"
               />
             </div>
           </div>
@@ -222,73 +217,99 @@ export function MaintenancesPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Asansör</TableHead>
-                <TableHead>Bina</TableHead>
-                <TableHead>Tarih</TableHead>
-                <TableHead>Açıklama</TableHead>
-                <TableHead>Ücret</TableHead>
-                <TableHead>Ödendi</TableHead>
-                <TableHead>Ödeme Tarihi</TableHead>
-                <TableHead className="text-right">İşlemler</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredMaintenances && filteredMaintenances.length > 0 ? (
-                filteredMaintenances.map((maintenance: Maintenance) => (
-                  <TableRow key={maintenance.id}>
-                    <TableCell className="font-medium">
-                      ELEV-{maintenance.elevatorId}
-                    </TableCell>
-                    <TableCell>{maintenance.elevatorBuildingName || '-'}</TableCell>
-                    <TableCell>{formatDateShort(maintenance.tarih)}</TableCell>
-                    <TableCell>{maintenance.aciklama}</TableCell>
-                    <TableCell>{formatCurrency(maintenance.ucret)}</TableCell>
-                    <TableCell>
-                      {maintenance.odendi ? (
-                        <Badge variant="green">Ödendi</Badge>
-                      ) : (
-                        <Badge variant="destructive">Ödenmedi</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {maintenance.odemeTarihi ? formatDateShort(maintenance.odemeTarihi) : '-'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {!maintenance.odendi && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => markPaidMutation.mutate(maintenance.id)}
-                          >
-                            <Check className="h-4 w-4 text-green-600" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(maintenance.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
-                    Bakım kaydı bulunamadı
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <TableResponsive
+          data={filteredMaintenances}
+          columns={[
+            {
+              key: 'elevatorId',
+              header: 'Asansör',
+              mobileLabel: 'Asansör',
+              mobilePriority: 10,
+              render: (maintenance: Maintenance) => (
+                <span className="font-medium">ELEV-{maintenance.elevatorId}</span>
+              ),
+            },
+            {
+              key: 'elevatorBuildingName',
+              header: 'Bina',
+              mobileLabel: 'Bina',
+              mobilePriority: 9,
+            },
+            {
+              key: 'tarih',
+              header: 'Tarih',
+              mobileLabel: 'Tarih',
+              mobilePriority: 8,
+              render: (maintenance: Maintenance) => formatDateShort(maintenance.tarih),
+            },
+            {
+              key: 'aciklama',
+              header: 'Açıklama',
+              mobileLabel: 'Açıklama',
+              mobilePriority: 7,
+              hideOnMobile: true,
+            },
+            {
+              key: 'ucret',
+              header: 'Ücret',
+              mobileLabel: 'Ücret',
+              mobilePriority: 6,
+              render: (maintenance: Maintenance) => formatCurrency(maintenance.ucret),
+            },
+            {
+              key: 'odendi',
+              header: 'Ödendi',
+              mobileLabel: 'Ödendi',
+              mobilePriority: 5,
+              render: (maintenance: Maintenance) =>
+                maintenance.odendi ? (
+                  <Badge variant="green">Ödendi</Badge>
+                ) : (
+                  <Badge variant="destructive">Ödenmedi</Badge>
+                ),
+            },
+            {
+              key: 'odemeTarihi',
+              header: 'Ödeme Tarihi',
+              mobileLabel: 'Ödeme Tarihi',
+              mobilePriority: 4,
+              hideOnMobile: true,
+              render: (maintenance: Maintenance) =>
+                maintenance.odemeTarihi ? formatDateShort(maintenance.odemeTarihi) : '-',
+            },
+            {
+              key: 'actions',
+              header: 'İşlemler',
+              mobileLabel: '',
+              mobilePriority: 1,
+              hideOnMobile: false,
+              render: (maintenance: Maintenance) => (
+                <div className="flex items-center justify-end gap-2">
+                  {!maintenance.odendi && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => markPaidMutation.mutate(maintenance.id)}
+                      className="h-11 w-11 sm:h-10 sm:w-10"
+                    >
+                      <Check className="h-4 w-4 text-green-600" />
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDelete(maintenance.id)}
+                    className="h-11 w-11 sm:h-10 sm:w-10"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ),
+            },
+          ]}
+          keyExtractor={(maintenance) => maintenance.id.toString()}
+          emptyMessage="Bakım kaydı bulunamadı"
+        />
       )}
 
       <ConfirmDialog
