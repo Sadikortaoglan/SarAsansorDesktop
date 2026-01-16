@@ -49,9 +49,15 @@ export function UsersPage() {
   })
 
   const usersArray = Array.isArray(users) ? users : []
+  
+  const activePatrons = usersArray.filter(u => u.role === 'PATRON' && (u.enabled || u.active))
+  const isLastActivePatron = (user: User) => 
+    user.role === 'PATRON' && 
+    (user.enabled || user.active) && 
+    activePatrons.length === 1
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => userService.delete(id),
+    mutationFn: (id: number) => userService.update(id, { enabled: false }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       toast({
@@ -97,6 +103,7 @@ export function UsersPage() {
           </DialogTrigger>
           <UserFormDialog
             user={selectedUser}
+            usersArray={usersArray}
             onClose={() => setIsDialogOpen(false)}
             onSuccess={() => {
               setIsDialogOpen(false)
@@ -156,13 +163,24 @@ export function UsersPage() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(user.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {isLastActivePatron(user) ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled
+                            title="En az bir aktif PATRON bulunmalıdır."
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(user.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -182,9 +200,9 @@ export function UsersPage() {
       <ConfirmDialog
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
-        title="Kullanıcıyı Sil"
-        message="Bu kullanıcıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
-        confirmText="Evet, Sil"
+        title="Kullanıcıyı Pasif Yap"
+        message="Bu kullanıcıyı pasif yapmak istediğinize emin misiniz? Kullanıcı silinmeyecek, sadece pasif hale getirilecektir."
+        confirmText="Evet, Pasif Yap"
         cancelText="İptal"
         onConfirm={confirmDelete}
         variant="destructive"
@@ -197,10 +215,12 @@ function UserFormDialog({
   user,
   onClose,
   onSuccess,
+  usersArray = [],
 }: {
   user: User | null
   onClose: () => void
   onSuccess: () => void
+  usersArray?: User[]
 }) {
   const [formData, setFormData] = useState({
     username: '',
@@ -354,8 +374,32 @@ function UserFormDialog({
                   onValueChange={(value) =>
                     setFormData({ ...formData, enabled: value === 'true' })
                   }
+                  disabled={(() => {
+                    const activePatrons = usersArray.filter(u => 
+                      u.role === 'PATRON' && 
+                      (u.enabled || u.active) && 
+                      u.id !== user.id
+                    )
+                    return user.role === 'PATRON' && 
+                           (user.enabled || user.active) && 
+                           activePatrons.length === 0
+                  })()}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger 
+                    title={(() => {
+                      const activePatrons = usersArray.filter(u => 
+                        u.role === 'PATRON' && 
+                        (u.enabled || u.active) && 
+                        u.id !== user.id
+                      )
+                      if (user.role === 'PATRON' && 
+                          (user.enabled || user.active) && 
+                          activePatrons.length === 0) {
+                        return 'En az bir aktif PATRON bulunmalıdır.'
+                      }
+                      return ''
+                    })()}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
