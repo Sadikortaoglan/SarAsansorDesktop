@@ -254,12 +254,18 @@ function FaultTableRow({ fault }: { fault: Fault }) {
     }
   }
 
+  const elevatorDisplay = fault.elevatorName || fault.elevator?.kimlikNo || 'Not Assigned'
+  const buildingDisplay = fault.buildingName || fault.elevator?.bina || fault.elevator?.binaAdi || 'Not Assigned'
+  const elevatorTooltip = fault.elevatorName || fault.elevator?.kimlikNo 
+    ? `${fault.elevatorName || fault.elevator?.kimlikNo} - ${buildingDisplay}`
+    : 'Asansör bilgisi atanmamış'
+
   return (
     <TableRow>
-      <TableCell className="font-medium">
-        {fault.elevator?.kimlikNo || '-'}
+      <TableCell className="font-medium" title={elevatorTooltip}>
+        {elevatorDisplay}
       </TableCell>
-      <TableCell>{fault.elevator?.bina || fault.elevator?.binaAdi || '-'}</TableCell>
+      <TableCell title={buildingDisplay}>{buildingDisplay}</TableCell>
       <TableCell>{fault.gorusulenKisi}</TableCell>
       <TableCell>{fault.arizaKonusu}</TableCell>
       <TableCell className="max-w-xs truncate">{fault.mesaj}</TableCell>
@@ -309,6 +315,7 @@ function FaultFormDialog({
 }) {
   const [formData, setFormData] = useState({
     elevatorId: '',
+    buildingName: '',
     gorusulenKisi: '',
     arizaKonusu: '',
     mesaj: '',
@@ -322,6 +329,16 @@ function FaultFormDialog({
   })
 
   const elevatorsArray = Array.isArray(elevators) ? elevators : []
+  
+  // Auto-fill building when elevator is selected
+  const handleElevatorChange = (elevatorId: string) => {
+    const selectedElevator = elevatorsArray.find((e) => e.id.toString() === elevatorId)
+    setFormData({
+      ...formData,
+      elevatorId,
+      buildingName: selectedElevator?.bina || selectedElevator?.binaAdi || '',
+    })
+  }
 
   const createMutation = useMutation({
     mutationFn: (data: { elevatorId: number; gorusulenKisi: string; arizaKonusu: string; mesaj: string; aciklama?: string }) =>
@@ -374,7 +391,8 @@ function FaultFormDialog({
             <Label htmlFor="elevatorId">Asansör *</Label>
             <Select
               value={formData.elevatorId}
-              onValueChange={(value) => setFormData({ ...formData, elevatorId: value })}
+              onValueChange={handleElevatorChange}
+              required
             >
               <SelectTrigger>
                 <SelectValue placeholder="Asansör seçin" />
@@ -387,6 +405,16 @@ function FaultFormDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="buildingName">Bina</Label>
+            <Input
+              id="buildingName"
+              value={formData.buildingName || 'Not Assigned'}
+              disabled
+              readOnly
+              className="bg-muted"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="gorusulenKisi">Görüşülen Kişi *</Label>

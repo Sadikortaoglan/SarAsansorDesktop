@@ -158,7 +158,7 @@ export const elevatorService = {
   },
 
   create: async (elevator: CreateElevatorRequest): Promise<Elevator> => {
-    // Yeni backend field isimleri: identityNumber, buildingName, address, elevatorNumber, labelType, labelDate, endDate, managerTcIdentityNumber, managerPhoneNumber
+    // Backend field isimleri: identityNumber, buildingName, address, elevatorNumber, labelType, labelDate, expiryDate, managerTcIdentityNo, managerPhone
     const backendRequest: any = {
       identityNumber: elevator.kimlikNo,
       buildingName: elevator.bina,
@@ -166,10 +166,13 @@ export const elevatorService = {
       elevatorNumber: elevator.durak,
       labelType: elevator.labelType,
       labelDate: elevator.labelDate,
-      endDate: elevator.endDate,
-      managerTcIdentityNumber: elevator.managerTcIdentityNumber,
-      managerPhoneNumber: elevator.managerPhoneNumber,
+      expiryDate: elevator.endDate, // Backend expects expiryDate, not endDate
+      managerTcIdentityNo: elevator.managerTcIdentityNumber, // Backend expects managerTcIdentityNo
+      managerPhone: elevator.managerPhoneNumber, // Backend expects managerPhone
     }
+    
+    // Debug: Log payload before sending
+    console.log('Elevator create payload:', JSON.stringify(backendRequest, null, 2))
     
     const { data } = await apiClient.post<ApiResponse<any>>('/elevators', backendRequest)
     const unwrapped = unwrapResponse(data)
@@ -184,9 +187,12 @@ export const elevatorService = {
     if (elevator.durak !== undefined) backendRequest.elevatorNumber = elevator.durak
     if (elevator.labelType !== undefined) backendRequest.labelType = elevator.labelType
     if (elevator.labelDate !== undefined) backendRequest.labelDate = elevator.labelDate
-    if (elevator.endDate !== undefined) backendRequest.endDate = elevator.endDate
-    if (elevator.managerTcIdentityNumber !== undefined) backendRequest.managerTcIdentityNumber = elevator.managerTcIdentityNumber
-    if (elevator.managerPhoneNumber !== undefined) backendRequest.managerPhoneNumber = elevator.managerPhoneNumber
+    if (elevator.endDate !== undefined) backendRequest.expiryDate = elevator.endDate // Backend expects expiryDate
+    if (elevator.managerTcIdentityNumber !== undefined) backendRequest.managerTcIdentityNo = elevator.managerTcIdentityNumber
+    if (elevator.managerPhoneNumber !== undefined) backendRequest.managerPhone = elevator.managerPhoneNumber
+    
+    // Debug: Log payload before sending
+    console.log('Elevator update payload:', JSON.stringify(backendRequest, null, 2))
     
     const { data } = await apiClient.put<ApiResponse<any>>(`/elevators/${id}`, backendRequest)
     const unwrapped = unwrapResponse(data)

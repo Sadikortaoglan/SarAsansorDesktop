@@ -361,9 +361,7 @@ function ElevatorFormDialog({
     durak: '',
     labelType: '' as ElevatorLabelType | '',
     labelDate: '',
-    durationMonths: '' as string | '',
     endDate: '',
-    useDuration: true,
     managerTcIdentityNumber: '',
     managerPhoneNumber: '',
   })
@@ -371,21 +369,7 @@ function ElevatorFormDialog({
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  // Calculate end date based on label date and duration
-  useEffect(() => {
-    if (formData.useDuration && formData.labelDate && formData.durationMonths) {
-      const labelDateObj = new Date(formData.labelDate)
-      const months = parseInt(formData.durationMonths)
-      if (!isNaN(months) && months > 0) {
-        const endDateObj = new Date(labelDateObj)
-        endDateObj.setMonth(endDateObj.getMonth() + months)
-        setFormData((prev) => ({
-          ...prev,
-          endDate: endDateObj.toISOString().split('T')[0],
-        }))
-      }
-    }
-  }, [formData.labelDate, formData.durationMonths, formData.useDuration])
+  // Duration selection removed - End Date must be selected manually
 
   useEffect(() => {
     if (elevator) {
@@ -399,9 +383,7 @@ function ElevatorFormDialog({
         durak: elevator.durak || '',
         labelType: (elevator.labelType || '') as ElevatorLabelType | '',
         labelDate: labelDate ? labelDate.split('T')[0] : '',
-        durationMonths: '',
         endDate: endDate ? endDate.split('T')[0] : '',
-        useDuration: false,
         managerTcIdentityNumber: elevator.managerTc || '',
         managerPhoneNumber: elevator.managerPhone || '',
       })
@@ -413,9 +395,7 @@ function ElevatorFormDialog({
         durak: '',
         labelType: '' as ElevatorLabelType | '',
         labelDate: '',
-        durationMonths: '',
         endDate: '',
-        useDuration: true,
         managerTcIdentityNumber: '',
         managerPhoneNumber: '',
       })
@@ -433,9 +413,18 @@ function ElevatorFormDialog({
 
   const validatePhone = (phone: string): string => {
     if (!phone) return 'Telefon numarası zorunludur'
-    if (!/^\d+$/.test(phone)) return 'Telefon numarası sadece rakam içermelidir'
-    if (phone.length < 10) return 'Telefon numarası en az 10 haneli olmalıdır'
+    const digitsOnly = phone.replace(/\D/g, '')
+    if (digitsOnly.length < 10) return 'Telefon numarası en az 10 haneli olmalıdır'
+    if (digitsOnly.length > 11) return 'Telefon numarası en fazla 11 haneli olmalıdır'
+    if (digitsOnly.length !== 10 && digitsOnly.length !== 11) {
+      return 'Telefon numarası 10 veya 11 haneli olmalıdır'
+    }
     return ''
+  }
+  
+  const normalizePhone = (phone: string): string => {
+    // Remove all non-digit characters
+    return phone.replace(/\D/g, '')
   }
 
   const validateForm = (): boolean => {
@@ -449,19 +438,33 @@ function ElevatorFormDialog({
       newErrors.labelDate = 'Etiket tarihi zorunludur'
     }
     
-    if (formData.useDuration && !formData.durationMonths) {
-      newErrors.durationMonths = 'Süre seçilmelidir'
-    }
-    
-    if (!formData.useDuration && !formData.endDate) {
+    // End Date validation
+    if (!formData.endDate) {
       newErrors.endDate = 'Bitiş tarihi zorunludur'
+    } else if (formData.labelDate && formData.endDate) {
+      const labelDateObj = new Date(formData.labelDate)
+      const endDateObj = new Date(formData.endDate)
+      labelDateObj.setHours(0, 0, 0, 0)
+      endDateObj.setHours(0, 0, 0, 0)
+      
+      if (endDateObj <= labelDateObj) {
+        newErrors.endDate = 'Bitiş tarihi, etiket tarihinden sonra olmalıdır'
+      }
     }
     
-    const tcError = validateTcIdentity(formData.managerTcIdentityNumber)
-    if (tcError) newErrors.managerTcIdentityNumber = tcError
+    if (!formData.managerTcIdentityNumber) {
+      newErrors.managerTcIdentityNumber = 'Yönetici TC Kimlik No zorunludur'
+    } else {
+      const tcError = validateTcIdentity(formData.managerTcIdentityNumber)
+      if (tcError) newErrors.managerTcIdentityNumber = tcError
+    }
     
-    const phoneError = validatePhone(formData.managerPhoneNumber)
-    if (phoneError) newErrors.managerPhoneNumber = phoneError
+    if (!formData.managerPhoneNumber) {
+      newErrors.managerPhoneNumber = 'Yönetici telefon numarası zorunludur'
+    } else {
+      const phoneError = validatePhone(formData.managerPhoneNumber)
+      if (phoneError) newErrors.managerPhoneNumber = phoneError
+    }
     
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -469,6 +472,9 @@ function ElevatorFormDialog({
 
   const createMutation = useMutation({
     mutationFn: (data: typeof formData) => {
+      // Normalize phone number (already normalized in handleSubmit, but ensure here too)
+      const normalizedPhone = normalizePhone(data.managerPhoneNumber)
+      
       return elevatorService.create({
         kimlikNo: data.kimlikNo,
         bina: data.bina,
@@ -478,7 +484,7 @@ function ElevatorFormDialog({
         labelDate: data.labelDate,
         endDate: data.endDate,
         managerTcIdentityNumber: data.managerTcIdentityNumber,
-        managerPhoneNumber: data.managerPhoneNumber,
+        managerPhoneNumber: normalizedPhone, // Send normalized phone
       })
     },
     onSuccess: () => {
@@ -503,6 +509,9 @@ function ElevatorFormDialog({
   const updateMutation = useMutation({
     mutationFn: (data: typeof formData) => {
       if (!elevator) throw new Error('Elevator ID required')
+      // Normalize phone number (already normalized in handleSubmit, but ensure here too)
+      const normalizedPhone = normalizePhone(data.managerPhoneNumber)
+      
       return elevatorService.update(elevator.id, {
         kimlikNo: data.kimlikNo,
         bina: data.bina,
@@ -512,7 +521,7 @@ function ElevatorFormDialog({
         labelDate: data.labelDate,
         endDate: data.endDate,
         managerTcIdentityNumber: data.managerTcIdentityNumber,
-        managerPhoneNumber: data.managerPhoneNumber,
+        managerPhoneNumber: normalizedPhone, // Send normalized phone
       })
     },
     onSuccess: () => {
@@ -536,6 +545,8 @@ function ElevatorFormDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validate all required fields
     if (!validateForm()) {
       toast({
         title: 'Hata',
@@ -545,10 +556,36 @@ function ElevatorFormDialog({
       return
     }
     
+    // Ensure endDate is set (mandatory)
+    if (!formData.endDate) {
+      toast({
+        title: 'Hata',
+        description: 'Bitiş tarihi zorunludur.',
+        variant: 'destructive',
+      })
+      return
+    }
+    
+    // Normalize phone number before sending (digits only, no spaces, no +90, no formatting)
+    const normalizedPhone = normalizePhone(formData.managerPhoneNumber)
+    
+    // Prepare payload with correct field names
+    // End Date is always sent as expiryDate (no duration calculation)
+    const payload = {
+      ...formData,
+      endDate: formData.endDate, // Always use manually selected end date
+      managerPhoneNumber: normalizedPhone, // Normalized phone (digits only)
+    }
+    
+    // Debug: Log payload before sending
+    console.log('Elevator payload:', JSON.stringify(payload, null, 2))
+    console.log('Normalized phone:', normalizedPhone)
+    console.log('Expiry Date:', payload.endDate)
+    
     if (elevator) {
-      updateMutation.mutate(formData)
+      updateMutation.mutate(payload)
     } else {
-      createMutation.mutate(formData)
+      createMutation.mutate(payload)
     }
   }
 
@@ -559,7 +596,8 @@ function ElevatorFormDialog({
       formData.adres &&
       formData.labelType &&
       formData.labelDate &&
-      (formData.useDuration ? formData.durationMonths : formData.endDate) &&
+      formData.endDate && // End Date is mandatory
+      !errors.endDate && // No validation errors for end date
       !errors.managerTcIdentityNumber &&
       !errors.managerPhoneNumber &&
       formData.managerTcIdentityNumber &&
@@ -609,12 +647,12 @@ function ElevatorFormDialog({
               className="w-full"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="durak">Durak</Label>
-            <Input
-              id="durak"
-              value={formData.durak}
-              onChange={(e) => setFormData({ ...formData, durak: e.target.value })}
+            <div className="space-y-2">
+              <Label htmlFor="durak">Durak</Label>
+              <Input
+                id="durak"
+                value={formData.durak}
+                onChange={(e) => setFormData({ ...formData, durak: e.target.value })}
               className="w-full"
             />
           </div>
@@ -653,6 +691,16 @@ function ElevatorFormDialog({
               onChange={(e) => {
                 setFormData({ ...formData, labelDate: e.target.value })
                 setErrors({ ...errors, labelDate: '' })
+                // Clear end date error if label date changes
+                if (errors.endDate && formData.endDate) {
+                  const labelDateObj = new Date(e.target.value)
+                  const endDateObj = new Date(formData.endDate)
+                  labelDateObj.setHours(0, 0, 0, 0)
+                  endDateObj.setHours(0, 0, 0, 0)
+                  if (endDateObj > labelDateObj) {
+                    setErrors({ ...errors, labelDate: '', endDate: '' })
+                  }
+                }
               }}
               required
               className={cn('w-full', errors.labelDate && 'border-destructive')}
@@ -662,84 +710,36 @@ function ElevatorFormDialog({
             )}
           </div>
 
-          <div className="space-y-4 border-t pt-4">
-            <div className="flex items-center space-x-2">
-              <input
-                id="useDuration"
-                type="radio"
-                checked={formData.useDuration}
-                onChange={() => setFormData({ ...formData, useDuration: true, endDate: '' })}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="useDuration" className="cursor-pointer">
-                Süre Seç
-              </Label>
-            </div>
-            {formData.useDuration && (
-              <div className="space-y-2 pl-6">
-                <Label htmlFor="durationMonths">Süre *</Label>
-                <Select
-                  value={formData.durationMonths}
-                  onValueChange={(value) => {
-                    setFormData({ ...formData, durationMonths: value })
-                    setErrors({ ...errors, durationMonths: '' })
-                  }}
-                  required
-                >
-                  <SelectTrigger className={cn('w-full', errors.durationMonths && 'border-destructive')}>
-                    <SelectValue placeholder="Süre seçin" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3">3 Ay</SelectItem>
-                    <SelectItem value="6">6 Ay</SelectItem>
-                    <SelectItem value="12">12 Ay</SelectItem>
-                    <SelectItem value="24">24 Ay</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.durationMonths && (
-                  <p className="text-sm text-destructive">{errors.durationMonths}</p>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center space-x-2">
-              <input
-                id="useManualDate"
-                type="radio"
-                checked={!formData.useDuration}
-                onChange={() => setFormData({ ...formData, useDuration: false, durationMonths: '' })}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="useManualDate" className="cursor-pointer">
-                Bitiş Tarihi Manuel Seç
-              </Label>
-            </div>
-            {!formData.useDuration && (
-              <div className="space-y-2 pl-6">
-                <Label htmlFor="endDate">Bitiş Tarihi *</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={formData.endDate}
-                  onChange={(e) => {
-                    setFormData({ ...formData, endDate: e.target.value })
+          <div className="space-y-2">
+            <Label htmlFor="endDate">Bitiş Tarihi *</Label>
+            <Input
+              id="endDate"
+              type="date"
+              value={formData.endDate}
+              onChange={(e) => {
+                setFormData({ ...formData, endDate: e.target.value })
+                // Validate end date is after label date
+                if (formData.labelDate && e.target.value) {
+                  const labelDateObj = new Date(formData.labelDate)
+                  const endDateObj = new Date(e.target.value)
+                  labelDateObj.setHours(0, 0, 0, 0)
+                  endDateObj.setHours(0, 0, 0, 0)
+                  
+                  if (endDateObj <= labelDateObj) {
+                    setErrors({ ...errors, endDate: 'Bitiş tarihi, etiket tarihinden sonra olmalıdır' })
+                  } else {
                     setErrors({ ...errors, endDate: '' })
-                  }}
-                  required
-                  className={cn('w-full', errors.endDate && 'border-destructive')}
-                />
-                {errors.endDate && (
-                  <p className="text-sm text-destructive">{errors.endDate}</p>
-                )}
-              </div>
-            )}
-
-            {formData.useDuration && formData.endDate && (
-              <div className="pl-6">
-                <p className="text-sm text-muted-foreground">
-                  Hesaplanan Bitiş Tarihi: {new Date(formData.endDate).toLocaleDateString('tr-TR')}
-                </p>
-              </div>
+                  }
+                } else {
+                  setErrors({ ...errors, endDate: '' })
+                }
+              }}
+              min={formData.labelDate || undefined}
+              required
+              className={cn('w-full', errors.endDate && 'border-destructive')}
+            />
+            {errors.endDate && (
+              <p className="text-sm text-destructive">{errors.endDate}</p>
             )}
           </div>
 
@@ -771,17 +771,27 @@ function ElevatorFormDialog({
               <Label htmlFor="managerPhoneNumber">Yönetici Telefon No *</Label>
               <Input
                 id="managerPhoneNumber"
+                type="tel"
                 value={formData.managerPhoneNumber}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '')
+                  // Remove all non-digit characters
+                  let value = e.target.value.replace(/\D/g, '')
+                  // Limit to 11 digits
+                  if (value.length > 11) {
+                    value = value.slice(0, 11)
+                  }
                   setFormData({ ...formData, managerPhoneNumber: value })
                   const error = validatePhone(value)
                   setErrors({ ...errors, managerPhoneNumber: error })
                 }}
+                maxLength={11}
                 required
                 className={cn('w-full', errors.managerPhoneNumber && 'border-destructive')}
-                placeholder="Telefon numarası"
+                placeholder="10-11 haneli telefon numarası"
               />
+              <p className="text-xs text-muted-foreground">
+                Enter 10–11 digit Turkish phone number
+              </p>
               {errors.managerPhoneNumber && (
                 <p className="text-sm text-destructive">{errors.managerPhoneNumber}</p>
               )}
@@ -866,6 +876,19 @@ function MaintenanceFormDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validate minimum 4 photos
+    if (formData.photos.length < 4) {
+      setPhotoError('En az 4 fotoğraf yüklenmelidir')
+      toast({
+        title: 'Hata',
+        description: 'En az 4 fotoğraf yüklenmelidir.',
+        variant: 'destructive',
+      })
+      return
+    }
+    
+    setPhotoError('')
     createMutation.mutate(formData)
   }
 
@@ -876,12 +899,7 @@ function MaintenanceFormDialog({
     }
   }
 
-  const removePhoto = (index: number) => {
-    setFormData({
-      ...formData,
-      photos: formData.photos.filter((_, i) => i !== index),
-    })
-  }
+  const [photoError, setPhotoError] = useState<string>('')
 
   if (!elevator) return null
 
@@ -955,7 +973,7 @@ function MaintenanceFormDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="photos">Fotoğraflar (Opsiyonel)</Label>
+            <Label htmlFor="photos">Fotoğraflar * (Minimum 4 adet)</Label>
             <div className="border-2 border-dashed rounded-lg p-4">
               <Input
                 id="photos"
@@ -965,6 +983,12 @@ function MaintenanceFormDialog({
                 onChange={handlePhotoChange}
                 className="w-full"
               />
+              <div className="mt-2 text-sm text-muted-foreground">
+                Seçilen fotoğraf sayısı: {formData.photos.length} / 4 (minimum)
+              </div>
+              {photoError && (
+                <p className="mt-2 text-sm text-destructive">{photoError}</p>
+              )}
               {formData.photos.length > 0 && (
                 <div className="mt-4 space-y-2">
                   {formData.photos.map((photo, index) => (
@@ -974,7 +998,13 @@ function MaintenanceFormDialog({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        onClick={() => removePhoto(index)}
+                        onClick={() => {
+                          setFormData({
+                            ...formData,
+                            photos: formData.photos.filter((_, i) => i !== index),
+                          })
+                          setPhotoError('')
+                        }}
                         className="h-8 w-8"
                       >
                         <X className="h-4 w-4" />
@@ -990,7 +1020,11 @@ function MaintenanceFormDialog({
           <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto min-h-[44px]">
             İptal
           </Button>
-          <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
+          <Button 
+            type="submit" 
+            disabled={createMutation.isPending || formData.photos.length < 4} 
+            className="w-full sm:w-auto min-h-[44px]"
+          >
             {createMutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
           </Button>
         </DialogFooter>

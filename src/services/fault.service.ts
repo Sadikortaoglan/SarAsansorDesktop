@@ -5,6 +5,8 @@ import { unwrapResponse, unwrapArrayResponse, type ApiResponse } from '@/lib/api
 export interface Fault {
   id: number
   elevatorId: number
+  elevatorName?: string // Backend'den direkt gelen elevator name
+  buildingName?: string // Backend'den direkt gelen building name
   elevator?: {
     id: number
     kimlikNo: string
@@ -49,16 +51,19 @@ function mapFaultStatusFromBackend(backendStatus: string): 'OPEN' | 'IN_PROGRESS
 // Backend'den gelen formatı frontend formatına çevir
 // YENİ BACKEND FIELD İSİMLERİ (eski field'lar KULLANILMIYOR):
 // faultSubject, contactPerson, buildingAuthorizedMessage, description
+// elevatorName, buildingName (direkt backend'den gelebilir)
 function mapFaultFromBackend(backend: any): Fault {
   return {
     id: backend.id,
     elevatorId: backend.elevatorId || backend.elevator?.id,
+    elevatorName: backend.elevatorName || backend.elevator?.identityNumber || backend.elevator?.kimlikNo || '',
+    buildingName: backend.buildingName || backend.elevator?.buildingName || backend.elevator?.bina || backend.elevator?.binaAdi || '',
     elevator: backend.elevator ? {
       id: backend.elevator.id,
-      kimlikNo: backend.elevator.identityNumber || '',
-      bina: backend.elevator.buildingName || '',
-      binaAdi: backend.elevator.buildingName,
-      adres: backend.elevator.address || '',
+      kimlikNo: backend.elevator.identityNumber || backend.elevator.kimlikNo || '',
+      bina: backend.elevator.buildingName || backend.elevator.bina || '',
+      binaAdi: backend.elevator.buildingName || backend.elevator.binaAdi,
+      adres: backend.elevator.address || backend.elevator.adres || '',
     } : undefined,
     gorusulenKisi: backend.contactPerson || '',
     arizaKonusu: backend.faultSubject || '',
