@@ -84,9 +84,9 @@ export function ElevatorsPage() {
         return <Badge variant="warning">Uyarı</Badge>
       case 'OK':
       case 'ACTIVE':
-        return <Badge variant="success">Aktif</Badge>
+        return <Badge variant="active">Aktif</Badge>
       default:
-        return <Badge>{status}</Badge>
+        return <Badge variant="default">{status}</Badge>
     }
   }
 
@@ -94,13 +94,15 @@ export function ElevatorsPage() {
     if (!labelType) return <Badge variant="secondary">—</Badge>
     switch (labelType.toUpperCase()) {
       case 'GREEN':
-        return <Badge variant="success">Yeşil</Badge>
+        return <Badge variant="green">Yeşil</Badge>
       case 'BLUE':
-        return <Badge className="bg-blue-500 text-white hover:bg-blue-600">Mavi</Badge>
+        return <Badge variant="blue">Mavi</Badge>
       case 'YELLOW':
-        return <Badge variant="warning">Sarı</Badge>
+        return <Badge variant="yellow">Sarı</Badge>
       case 'RED':
-        return <Badge variant="expired">Kırmızı</Badge>
+        return <Badge variant="red">Kırmızı</Badge>
+      case 'ORANGE':
+        return <Badge variant="orange">Turuncu</Badge>
       default:
         return <Badge variant="secondary">{labelType}</Badge>
     }

@@ -46,21 +46,28 @@ export function TableResponsive<T extends Record<string, any>>({
 
   if (isDesktop) {
     return (
-      <div className={cn('rounded-md border', className)}>
+      <div className={cn('rounded-lg border bg-card shadow-sm overflow-hidden', className)}>
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-gradient-to-r from-indigo-50 to-indigo-100/50 border-b-2 border-indigo-200">
               {columns.map((column) => (
-                <TableHead key={column.key}>{column.header}</TableHead>
+                <TableHead key={column.key} className="font-semibold text-indigo-900">{column.header}</TableHead>
               ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.length > 0 ? (
-              data.map((item) => (
-                <TableRow key={keyExtractor(item)}>
+              data.map((item, index) => (
+                <TableRow 
+                  key={keyExtractor(item)}
+                  className={cn(
+                    'transition-colors duration-150',
+                    index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50',
+                    'hover:bg-gradient-to-r hover:from-indigo-50/50 hover:to-teal-50/50 hover:shadow-sm'
+                  )}
+                >
                   {columns.map((column) => (
-                    <TableCell key={column.key}>
+                    <TableCell key={column.key} className="py-3">
                       {column.render
                         ? column.render(item)
                         : item[column.key] ?? '-'}
@@ -70,7 +77,7 @@ export function TableResponsive<T extends Record<string, any>>({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
+                <TableCell colSpan={columns.length} className="text-center text-muted-foreground py-8">
                   {emptyMessage}
                 </TableCell>
               </TableRow>

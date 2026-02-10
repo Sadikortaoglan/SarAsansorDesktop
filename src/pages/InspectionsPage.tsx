@@ -75,7 +75,7 @@ export function InspectionsPage() {
     
     if (normalizedResult === 'PASS' || normalizedResult === 'PASSED') {
       return (
-        <Badge variant="success" className="flex items-center gap-1">
+        <Badge variant="active" className="flex items-center gap-1">
           <CheckCircle2 className="h-3 w-3" />
           Geçti
         </Badge>
@@ -91,13 +91,13 @@ export function InspectionsPage() {
     }
     if (normalizedResult === 'PENDING') {
       return (
-        <Badge variant="warning" className="flex items-center gap-1">
+        <Badge variant="pending" className="flex items-center gap-1">
           <Clock className="h-3 w-3" />
           Beklemede
         </Badge>
       )
     }
-    return <Badge>{result}</Badge>
+    return <Badge variant="default">{result}</Badge>
   }
 
   // Inspection color badge - Elevator list'teki gibi
@@ -111,13 +111,13 @@ export function InspectionsPage() {
     
     switch (normalizedColor) {
       case 'GREEN':
-        return <Badge variant="success">Yeşil</Badge>
+        return <Badge variant="green">Yeşil</Badge>
       case 'YELLOW':
-        return <Badge variant="warning">Sarı</Badge>
+        return <Badge variant="yellow">Sarı</Badge>
       case 'RED':
-        return <Badge variant="expired">Kırmızı</Badge>
+        return <Badge variant="red">Kırmızı</Badge>
       case 'ORANGE':
-        return <Badge className="bg-orange-500 text-white hover:bg-orange-600">Turuncu</Badge>
+        return <Badge variant="orange">Turuncu</Badge>
       default:
         return <Badge variant="secondary">{color}</Badge>
     }

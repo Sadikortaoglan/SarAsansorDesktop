@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
-import { formatDate, formatDateShort, formatCurrency } from '@/lib/utils'
+import { formatDate, formatDateShort, formatCurrency, cn } from '@/lib/utils'
 import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
 
 export function ElevatorDetailPage() {
@@ -76,9 +76,10 @@ export function ElevatorDetailPage() {
       case 'WARNING':
         return <Badge variant="warning">Uyarı</Badge>
       case 'OK':
-        return <Badge variant="success">Tamam</Badge>
+      case 'ACTIVE':
+        return <Badge variant="active">Aktif</Badge>
       default:
-        return <Badge>{status}</Badge>
+        return <Badge variant="default">{status}</Badge>
     }
   }
 
@@ -95,7 +96,7 @@ export function ElevatorDetailPage() {
       </div>
 
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-        <Card>
+        <Card className="border-l-4 border-l-indigo-500">
           <CardHeader>
             <CardTitle>Genel Bilgiler</CardTitle>
           </CardHeader>
@@ -119,7 +120,14 @@ export function ElevatorDetailPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={cn(
+          elevator.labelType === 'GREEN' ? 'border-l-4 border-l-green-500' :
+          elevator.labelType === 'BLUE' ? 'border-l-4 border-l-blue-500' :
+          elevator.labelType === 'YELLOW' ? 'border-l-4 border-l-yellow-500' :
+          elevator.labelType === 'RED' ? 'border-l-4 border-l-red-500' :
+          elevator.labelType === 'ORANGE' ? 'border-l-4 border-l-orange-500' :
+          'border-l-4 border-l-indigo-500'
+        )}>
           <CardHeader>
             <CardTitle>Teknik Bilgiler</CardTitle>
           </CardHeader>
@@ -129,13 +137,17 @@ export function ElevatorDetailPage() {
               <p className="text-lg font-medium">
                 {elevator.labelType ? (
                   elevator.labelType === 'GREEN' ? (
-                    <Badge variant="success">Yeşil</Badge>
+                    <Badge variant="green">Yeşil</Badge>
                   ) : elevator.labelType === 'BLUE' ? (
-                    <Badge className="bg-blue-500 text-white hover:bg-blue-600">Mavi</Badge>
+                    <Badge variant="blue">Mavi</Badge>
                   ) : elevator.labelType === 'YELLOW' ? (
-                    <Badge variant="warning">Sarı</Badge>
+                    <Badge variant="yellow">Sarı</Badge>
+                  ) : elevator.labelType === 'RED' ? (
+                    <Badge variant="red">Kırmızı</Badge>
+                  ) : elevator.labelType === 'ORANGE' ? (
+                    <Badge variant="orange">Turuncu</Badge>
                   ) : (
-                    <Badge variant="expired">Kırmızı</Badge>
+                    <Badge variant="default">—</Badge>
                   )
                 ) : (
                   <span className="text-muted-foreground">—</span>
@@ -161,7 +173,7 @@ export function ElevatorDetailPage() {
       </div>
 
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-        <Card>
+        <Card className="border-l-4 border-l-teal-500">
           <CardHeader>
             <CardTitle>Yönetici Bilgileri</CardTitle>
           </CardHeader>

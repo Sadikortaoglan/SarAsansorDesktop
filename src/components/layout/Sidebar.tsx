@@ -199,15 +199,15 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
           <button
             onClick={() => toggleMenu(item.title)}
             className={cn(
-              'flex items-center justify-between w-full rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
+              'flex items-center justify-between w-full rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200 min-h-[44px]',
               hasActiveChild
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md border-l-4 border-teal-400'
+                : 'text-muted-foreground hover:bg-gradient-to-r hover:from-indigo-50 hover:to-teal-50 hover:text-indigo-700'
             )}
             style={{ paddingLeft: `${12 + level * 16}px` }}
           >
             <div className="flex items-center gap-3 flex-1">
-              <Icon className="h-5 w-5 flex-shrink-0" />
+              <Icon className={cn('h-5 w-5 flex-shrink-0 transition-transform', hasActiveChild && 'scale-110')} />
               {item.title}
             </div>
             <ChevronRight
@@ -232,14 +232,14 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
         to={item.href!}
         onClick={handleNavClick}
         className={cn(
-          'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
+          'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200 min-h-[44px] relative',
           isActive
-            ? 'bg-primary text-primary-foreground'
-            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md border-l-4 border-teal-400'
+            : 'text-muted-foreground hover:bg-gradient-to-r hover:from-indigo-50 hover:to-teal-50 hover:text-indigo-700'
         )}
         style={{ paddingLeft: `${12 + level * 16}px` }}
       >
-        <Icon className="h-5 w-5 flex-shrink-0" />
+        <Icon className={cn('h-5 w-5 flex-shrink-0 transition-transform', isActive && 'scale-110')} />
         {item.title}
       </NavLink>
     )
@@ -266,9 +266,9 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
 
 export function Sidebar() {
   return (
-    <aside className="hidden lg:flex h-screen w-64 flex-col border-r bg-card">
-      <div className="flex h-16 items-center border-b px-6 flex-shrink-0">
-        <h1 className="text-xl font-bold text-primary">Sara Asansör</h1>
+    <aside className="hidden lg:flex h-screen w-64 flex-col border-r bg-gradient-to-b from-white to-indigo-50/30 shadow-lg">
+      <div className="flex h-16 items-center border-b border-indigo-200 bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 flex-shrink-0 shadow-md">
+        <h1 className="text-xl font-bold text-white drop-shadow-sm">Sara Asansör</h1>
       </div>
       <NavigationContent />
     </aside>

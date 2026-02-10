@@ -26,18 +26,18 @@ export function TopBar({ onMenuClick }: TopBarProps) {
   const pageTitle = currentPage?.title || 'Yönetim Paneli'
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background px-4 lg:px-6">
+    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-gradient-to-r from-white via-indigo-50/50 to-white px-4 lg:px-6 shadow-sm">
       <div className="flex items-center gap-4">
         <Button
           variant="ghost"
           size="icon"
-          className="lg:hidden"
+          className="lg:hidden hover:bg-indigo-100"
           onClick={onMenuClick}
           aria-label="Menu"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-5 w-5 text-indigo-700" />
         </Button>
-        <h2 className="text-base font-semibold lg:text-lg">{pageTitle}</h2>
+        <h2 className="text-base font-semibold lg:text-lg text-indigo-900">{pageTitle}</h2>
       </div>
       <div className="flex items-center gap-2 lg:gap-4">
         <DropdownMenu>
