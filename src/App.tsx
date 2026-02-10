@@ -19,6 +19,10 @@ import { UsersPage } from './pages/UsersPage'
 import { RevisionOffersPage } from './pages/RevisionOffersPage'
 import { RevisionOffersConvertedPage } from './pages/RevisionOffersConvertedPage'
 import { RevisionStandardsPage } from './pages/RevisionStandardsPage'
+import { MaintenanceCompletedPage } from './pages/maintenance/MaintenanceCompletedPage'
+import { MaintenanceUpcomingPage } from './pages/maintenance/MaintenanceUpcomingPage'
+import { MaintenanceItemsPage } from './pages/maintenance/MaintenanceItemsPage'
+import { MaintenancePlanningPage } from './pages/maintenance/MaintenancePlanningPage'
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -56,6 +60,10 @@ function AppRoutes() {
         <Route path="elevators" element={<ElevatorsPage />} />
         <Route path="elevators/:id" element={<ElevatorDetailPage />} />
         <Route path="maintenances" element={<MaintenancesPage />} />
+        <Route path="maintenances/completed" element={<MaintenanceCompletedPage />} />
+        <Route path="maintenances/upcoming" element={<MaintenanceUpcomingPage />} />
+        <Route path="maintenances/items" element={<MaintenanceItemsPage />} />
+        <Route path="maintenances/plan" element={<MaintenancePlanningPage />} />
         <Route path="warnings" element={<WarningsPage />} />
         <Route path="parts" element={<PartsPage />} />
         <Route path="offers" element={<OffersPage />} />

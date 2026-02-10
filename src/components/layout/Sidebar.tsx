@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useQuery } from '@tanstack/react-query'
+import { dashboardService } from '@/services/dashboard.service'
 import {
   LayoutDashboard,
   Building2,
@@ -18,6 +20,9 @@ import {
   ListChecks,
   PlusCircle,
   Settings,
+  Calendar,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -44,10 +49,35 @@ export const menuItems: MenuItem[] = [
     roles: ['PATRON', 'PERSONEL'] as const,
   },
   {
-    title: 'Bakımlar',
-    href: '/maintenances',
+    title: 'Bakım İşlemleri',
     icon: Wrench,
     roles: ['PATRON', 'PERSONEL'] as const,
+    children: [
+      {
+        title: 'Bakım Planla',
+        href: '/maintenances/plan',
+        icon: Calendar,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Tamamlananlar',
+        href: '/maintenances/completed',
+        icon: CheckCircle2,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Tamamlanacaklar',
+        href: '/maintenances/upcoming',
+        icon: Clock,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Bakım Maddeleri Yönet',
+        href: '/maintenances/items',
+        icon: Settings,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+    ],
   },
   {
     title: 'Uyarılar',
@@ -157,6 +187,13 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
     })
   }, [location.pathname, expandedMenu])
 
+  // Fetch counts for sidebar badges
+  const { data: counts } = useQuery({
+    queryKey: ['dashboard', 'counts'],
+    queryFn: () => dashboardService.getCounts(),
+    refetchInterval: 30000, // Refetch every 30 seconds
+  })
+
   const visibleItems = menuItems.filter((item) =>
     item.roles.some((role) => hasRole(role))
   )
@@ -194,6 +231,18 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
     }
 
     if (hasChildren) {
+      // Calculate total badge count for parent menu (sum of all children)
+      const totalBadgeCount = counts
+        ? visibleChildren.reduce((sum, child) => {
+            if (!child.href) return sum
+            if (child.href === '/maintenances/plan') return sum + (counts.maintenancePlansUpcoming || 0)
+            if (child.href === '/maintenances/completed') return sum + (counts.maintenanceSessionsCompleted || 0)
+            if (child.href === '/maintenances/upcoming') return sum + (counts.maintenancePlansUpcoming || 0)
+            if (child.href === '/maintenances/items') return sum + (counts.maintenanceTemplates || 0)
+            return sum
+          }, 0)
+        : 0
+
       return (
         <div key={item.title}>
           <button
@@ -210,12 +259,26 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
               <Icon className={cn('h-5 w-5 flex-shrink-0 transition-transform', hasActiveChild && 'scale-110')} />
               {item.title}
             </div>
-            <ChevronRight
-              className={cn(
-                'h-4 w-4 flex-shrink-0 transition-transform duration-200',
-                isExpanded && 'rotate-90'
+            <div className="flex items-center gap-2">
+              {totalBadgeCount > 0 && (
+                <span
+                  className={cn(
+                    'flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold',
+                    hasActiveChild
+                      ? 'bg-white/20 text-white'
+                      : 'bg-indigo-500 text-white'
+                  )}
+                >
+                  {totalBadgeCount > 99 ? '99+' : totalBadgeCount}
+                </span>
               )}
-            />
+              <ChevronRight
+                className={cn(
+                  'h-4 w-4 flex-shrink-0 transition-transform duration-200',
+                  isExpanded && 'rotate-90'
+                )}
+              />
+            </div>
           </button>
           {isExpanded && visibleChildren.length > 0 && (
             <div className="mt-1 space-y-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
@@ -225,6 +288,19 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
         </div>
       )
     }
+
+    // Get badge count for specific menu items
+    const getBadgeCount = (href: string): number | undefined => {
+      if (!counts) return undefined
+      if (href === '/maintenances/plan') return counts.maintenancePlansUpcoming
+      if (href === '/maintenances/completed') return counts.maintenanceSessionsCompleted
+      if (href === '/maintenances/upcoming') return counts.maintenancePlansUpcoming
+      if (href === '/maintenances/items') return counts.maintenanceTemplates
+      if (href === '/warnings') return counts.warnings
+      return undefined
+    }
+
+    const badgeCount = getBadgeCount(item.href!)
 
     return (
       <NavLink
@@ -240,7 +316,19 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
         style={{ paddingLeft: `${12 + level * 16}px` }}
       >
         <Icon className={cn('h-5 w-5 flex-shrink-0 transition-transform', isActive && 'scale-110')} />
-        {item.title}
+        <span className="flex-1">{item.title}</span>
+        {badgeCount !== undefined && badgeCount > 0 && (
+          <span
+            className={cn(
+              'flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold',
+              isActive
+                ? 'bg-white/20 text-white'
+                : 'bg-indigo-500 text-white'
+            )}
+          >
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        )}
       </NavLink>
     )
   }
