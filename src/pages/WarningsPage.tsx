@@ -172,29 +172,29 @@ export function WarningsPage() {
                         {isExpanded && (
                           <div className="border-t border-red-200 bg-white">
                             <div className="p-4">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Kimlik No</TableHead>
-                                    <TableHead>Bitiş Tarihi</TableHead>
-                                    <TableHead>Durum</TableHead>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Kimlik No</TableHead>
+                        <TableHead>Bitiş Tarihi</TableHead>
+                        <TableHead>Durum</TableHead>
                                     <TableHead className="text-right">İşlem</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                                   {warning.elevators.map((elevator, elevatorIndex) => (
                                     <TableRow key={`${buildingKey}-elevator-${elevatorIndex}`}>
-                                      <TableCell className="font-medium">
+                          <TableCell className="font-medium">
                                         {elevator.identityNo}
-                                      </TableCell>
-                                      <TableCell>
+                          </TableCell>
+                          <TableCell>
                                         {elevator.maintenanceEndDate
                                           ? formatDateShort(elevator.maintenanceEndDate)
-                                          : '-'}
-                                      </TableCell>
-                                      <TableCell>
-                                        <Badge variant="expired">Süresi Geçti</Badge>
-                                      </TableCell>
+                              : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="expired">Süresi Geçti</Badge>
+                          </TableCell>
                                       <TableCell className="text-right">
                                         <Button
                                           variant="ghost"
@@ -209,11 +209,11 @@ export function WarningsPage() {
                                           <Eye className="h-4 w-4" />
                                         </Button>
                                       </TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </div>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
                           </div>
                         )}
                       </div>
@@ -284,27 +284,27 @@ export function WarningsPage() {
                         {isExpanded && (
                           <div className="border-t border-orange-200 bg-white">
                             <div className="p-4">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Kimlik No</TableHead>
-                                    <TableHead>Bitiş Tarihi</TableHead>
-                                    <TableHead>Durum</TableHead>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Kimlik No</TableHead>
+                        <TableHead>Bitiş Tarihi</TableHead>
+                        <TableHead>Durum</TableHead>
                                     <TableHead className="text-right">İşlem</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                                   {warning.elevators.map((elevator, elevatorIndex) => (
                                     <TableRow key={`${buildingKey}-elevator-${elevatorIndex}`}>
-                                      <TableCell className="font-medium">
+                          <TableCell className="font-medium">
                                         {elevator.identityNo}
-                                      </TableCell>
-                                      <TableCell>
+                          </TableCell>
+                          <TableCell>
                                         {elevator.maintenanceEndDate
                                           ? formatDateShort(elevator.maintenanceEndDate)
-                                          : '-'}
-                                      </TableCell>
-                                      <TableCell>
+                              : '-'}
+                          </TableCell>
+                          <TableCell>
                                         <Badge variant="warning">30 Gün Kaldı</Badge>
                                       </TableCell>
                                       <TableCell className="text-right">
@@ -320,12 +320,12 @@ export function WarningsPage() {
                                         >
                                           <Eye className="h-4 w-4" />
                                         </Button>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
                           </div>
                         )}
                       </div>

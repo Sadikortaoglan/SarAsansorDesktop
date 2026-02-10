@@ -46,7 +46,7 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        {children}
+      {children}
       </div>
       <DialogPrimitive.Close className="absolute right-3 top-3 sm:right-4 sm:top-4 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground h-10 w-10 min-h-[44px] min-w-[44px] flex items-center justify-center">
         <X className="h-5 w-5" />

@@ -129,18 +129,28 @@ export function ElevatorDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label className="text-muted-foreground">Blue Label</Label>
+              <Label className="text-muted-foreground">Etiket Tipi</Label>
               <p className="text-lg font-medium">
-                {elevator.blueLabel ? (
-                  <Badge variant="default">Yes</Badge>
+                {elevator.labelType ? (
+                  elevator.labelType === 'GREEN' ? (
+                    <Badge variant="success">Yeşil</Badge>
+                  ) : elevator.labelType === 'BLUE' ? (
+                    <Badge className="bg-blue-500 text-white hover:bg-blue-600">Mavi</Badge>
+                  ) : elevator.labelType === 'YELLOW' ? (
+                    <Badge variant="warning">Sarı</Badge>
+                  ) : (
+                    <Badge variant="expired">Kırmızı</Badge>
+                  )
                 ) : (
-                  <Badge variant="secondary">No</Badge>
+                  <span className="text-muted-foreground">—</span>
                 )}
               </p>
             </div>
             <div>
-              <Label className="text-muted-foreground">Mavi Etiket Tarihi</Label>
-              <p className="text-lg font-medium">{formatDate(elevator.maviEtiketTarihi)}</p>
+              <Label className="text-muted-foreground">Etiket Tarihi</Label>
+              <p className="text-lg font-medium">
+                {elevator.labelDate ? formatDate(elevator.labelDate) : formatDate(elevator.maviEtiketTarihi)}
+              </p>
             </div>
             <div>
               <Label className="text-muted-foreground">Bitiş Tarihi</Label>
@@ -152,6 +162,87 @@ export function ElevatorDetailPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+        {(elevator.managerName || elevator.managerTc || elevator.managerPhone || elevator.managerEmail) && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Yönetici Bilgileri</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {elevator.managerName && (
+                <div>
+                  <Label className="text-muted-foreground">Yönetici Adı</Label>
+                  <p className="text-lg font-medium">{elevator.managerName}</p>
+                </div>
+              )}
+              {elevator.managerTc && (
+                <div>
+                  <Label className="text-muted-foreground">TC Kimlik No</Label>
+                  <p className="text-lg font-medium">{elevator.managerTc}</p>
+                </div>
+              )}
+              {elevator.managerPhone && (
+                <div>
+                  <Label className="text-muted-foreground">Telefon</Label>
+                  <p className="text-lg font-medium">
+                    <a href={`tel:${elevator.managerPhone}`} className="text-primary hover:underline">
+                      {elevator.managerPhone}
+                    </a>
+                  </p>
+                </div>
+              )}
+              {elevator.managerEmail && (
+                <div>
+                  <Label className="text-muted-foreground">E-posta</Label>
+                  <p className="text-lg font-medium">
+                    <a href={`mailto:${elevator.managerEmail}`} className="text-primary hover:underline">
+                      {elevator.managerEmail}
+                    </a>
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {(elevator.currentAccountId || elevator.currentAccountName) && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Cari Hesap Bilgileri</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {elevator.currentAccountName && (
+                <div>
+                  <Label className="text-muted-foreground">Cari Hesap</Label>
+                  <p className="text-lg font-medium">{elevator.currentAccountName}</p>
+                </div>
+              )}
+              {elevator.currentAccountBalance !== undefined && (
+                <div>
+                  <Label className="text-muted-foreground">Bakiye</Label>
+                  <p className={`text-lg font-medium ${elevator.currentAccountBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(Math.abs(elevator.currentAccountBalance))}
+                    {elevator.currentAccountBalance >= 0 ? ' (Alacak)' : ' (Borç)'}
+                  </p>
+                </div>
+              )}
+              {elevator.currentAccountDebt !== undefined && elevator.currentAccountDebt > 0 && (
+                <div>
+                  <Label className="text-muted-foreground">Toplam Borç</Label>
+                  <p className="text-lg font-medium text-red-600">{formatCurrency(elevator.currentAccountDebt)}</p>
+                </div>
+              )}
+              {elevator.currentAccountCredit !== undefined && elevator.currentAccountCredit > 0 && (
+                <div>
+                  <Label className="text-muted-foreground">Toplam Alacak</Label>
+                  <p className="text-lg font-medium text-green-600">{formatCurrency(elevator.currentAccountCredit)}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <Card>
@@ -213,9 +304,9 @@ export function ElevatorDetailPage() {
                   mobilePriority: 7,
                   render: (maintenance) =>
                     maintenance.odendi ? (
-                      <Badge variant="success">Ödendi</Badge>
-                    ) : (
-                      <Badge variant="destructive">Ödenmedi</Badge>
+                          <Badge variant="success">Ödendi</Badge>
+                        ) : (
+                          <Badge variant="destructive">Ödenmedi</Badge>
                     ),
                 },
                 {
@@ -234,19 +325,19 @@ export function ElevatorDetailPage() {
                   mobilePriority: 1,
                   hideOnMobile: false,
                   render: (maintenance) => (
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
                           setMaintenanceToDelete(maintenance.id)
                           setConfirmDeleteOpen(true)
-                        }}
+                            }}
                         className="h-11 w-11 sm:h-10 sm:w-10"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                   ),
                 },
               ]}

@@ -269,19 +269,19 @@ function FaultTableRow({ fault }: { fault: Fault }) {
         <div className="flex items-center justify-end gap-2">
           {fault.durum !== 'COMPLETED' && (
             <>
-              <Select
-                value={fault.durum}
+            <Select
+              value={fault.durum}
                 onValueChange={handleStatusChange}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="OPEN">Açık</SelectItem>
-                  <SelectItem value="IN_PROGRESS">Devam Ediyor</SelectItem>
-                  <SelectItem value="COMPLETED">Tamamlandı</SelectItem>
-                </SelectContent>
-              </Select>
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="OPEN">Açık</SelectItem>
+                <SelectItem value="IN_PROGRESS">Devam Ediyor</SelectItem>
+                <SelectItem value="COMPLETED">Tamamlandı</SelectItem>
+              </SelectContent>
+            </Select>
               <ConfirmDialog
                 open={confirmStatusUpdateOpen}
                 onOpenChange={setConfirmStatusUpdateOpen}

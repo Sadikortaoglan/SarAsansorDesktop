@@ -135,9 +135,9 @@ export function UsersPage() {
               mobileLabel: 'Rol',
               mobilePriority: 9,
               render: (user: User) => (
-                <Badge variant={user.role === 'PATRON' ? 'default' : 'secondary'}>
-                  {user.role}
-                </Badge>
+                      <Badge variant={user.role === 'PATRON' ? 'default' : 'secondary'}>
+                        {user.role}
+                      </Badge>
               ),
             },
             {
@@ -146,9 +146,9 @@ export function UsersPage() {
               mobileLabel: 'Durum',
               mobilePriority: 8,
               render: (user: User) => (
-                <Badge variant={user.enabled ? 'success' : 'destructive'}>
-                  {user.enabled ? 'Aktif' : 'Pasif'}
-                </Badge>
+                      <Badge variant={user.enabled ? 'success' : 'destructive'}>
+                        {user.enabled ? 'Aktif' : 'Pasif'}
+                      </Badge>
               ),
             },
             {
@@ -158,18 +158,18 @@ export function UsersPage() {
               mobilePriority: 1,
               hideOnMobile: false,
               render: (user: User) => (
-                <div className="flex items-center justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setSelectedUser(user)
-                      setIsDialogOpen(true)
-                    }}
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSelectedUser(user)
+                            setIsDialogOpen(true)
+                          }}
                     className="h-11 w-11 sm:h-10 sm:w-10"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
                   {isLastActivePatron(user) ? (
                     <Button
                       variant="ghost"
@@ -181,16 +181,16 @@ export function UsersPage() {
                       <Trash2 className="h-4 w-4 text-muted-foreground" />
                     </Button>
                   ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(user.id)}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(user.id)}
                       className="h-11 w-11 sm:h-10 sm:w-10"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                   )}
-                </div>
+        </div>
               ),
             },
           ]}

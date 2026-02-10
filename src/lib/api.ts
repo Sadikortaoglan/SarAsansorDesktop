@@ -54,9 +54,9 @@ apiClient.interceptors.request.use(
         delete config.headers.Authorization
       }
     }
-    if (!config.headers) {
-      config.headers = {} as any
-    }
+      if (!config.headers) {
+        config.headers = {} as any
+      }
     config.headers['Content-Type'] = 'application/json'
     config.headers['Accept'] = 'application/json'
     

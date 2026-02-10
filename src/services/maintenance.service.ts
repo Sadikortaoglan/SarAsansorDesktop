@@ -19,13 +19,17 @@ export interface Maintenance {
   odemeTarihi?: string
 }
 
-// Backend field isimleri: teknisyenUserId (opsiyonel)
+export type LabelType = 'GREEN' | 'BLUE' | 'YELLOW' | 'RED'
+
+// Backend field isimleri: teknisyenUserId (opsiyonel), labelType, photos
 export interface CreateMaintenanceRequest {
   elevatorId: number
   tarih: string
+  labelType: LabelType // Etiket tipi (GREEN, BLUE, YELLOW, RED)
   aciklama: string
   ucret: number
   teknisyenUserId?: number // Backend'de var ama opsiyonel
+  photos?: File[] // Fotoğraflar (opsiyonel)
 }
 
 export interface UpdateMaintenanceRequest extends Partial<CreateMaintenanceRequest> {}
@@ -118,19 +122,31 @@ export const maintenanceService = {
   },
 
   create: async (maintenance: CreateMaintenanceRequest): Promise<Maintenance> => {
-    // Yeni backend field isimleri: date, description, technicianUserId, amount
-    const backendRequest: any = {
-      elevatorId: maintenance.elevatorId,
-      date: maintenance.tarih,
-      description: maintenance.aciklama,
-      amount: maintenance.ucret,
-    }
+    // Yeni backend field isimleri: date, description, technicianUserId, amount, labelType
+    const formData = new FormData()
+    formData.append('elevatorId', String(maintenance.elevatorId))
+    formData.append('date', maintenance.tarih)
+    formData.append('labelType', maintenance.labelType)
+    formData.append('description', maintenance.aciklama)
+    formData.append('amount', String(maintenance.ucret))
+    
     // Opsiyonel field'lar
     if (maintenance.teknisyenUserId) {
-      backendRequest.technicianUserId = maintenance.teknisyenUserId
+      formData.append('technicianUserId', String(maintenance.teknisyenUserId))
     }
     
-    const { data } = await apiClient.post<ApiResponse<any>>('/maintenances', backendRequest)
+    // Fotoğraflar
+    if (maintenance.photos && maintenance.photos.length > 0) {
+      maintenance.photos.forEach((photo) => {
+        formData.append(`photos`, photo)
+      })
+    }
+    
+    const { data } = await apiClient.post<ApiResponse<any>>('/maintenances', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
     const unwrapped = unwrapResponse(data)
     return mapMaintenanceFromBackend(unwrapped)
   },

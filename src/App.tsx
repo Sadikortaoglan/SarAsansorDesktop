@@ -16,6 +16,9 @@ import { FaultsPage } from './pages/FaultsPage'
 import { InspectionsPage } from './pages/InspectionsPage'
 import { PaymentsPage } from './pages/PaymentsPage'
 import { UsersPage } from './pages/UsersPage'
+import { RevisionOffersPage } from './pages/RevisionOffersPage'
+import { RevisionOffersConvertedPage } from './pages/RevisionOffersConvertedPage'
+import { RevisionStandardsPage } from './pages/RevisionStandardsPage'
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -56,6 +59,9 @@ function AppRoutes() {
         <Route path="warnings" element={<WarningsPage />} />
         <Route path="parts" element={<PartsPage />} />
         <Route path="offers" element={<OffersPage />} />
+        <Route path="revision-offers" element={<RevisionOffersPage />} />
+        <Route path="revision-offers/converted" element={<RevisionOffersConvertedPage />} />
+        <Route path="revision-standards" element={<RevisionStandardsPage />} />
         <Route path="faults" element={<FaultsPage />} />
         <Route path="inspections" element={<InspectionsPage />} />
         <Route path="payments" element={<PaymentsPage />} />

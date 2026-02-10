@@ -490,10 +490,10 @@ function OfferFormDialog({
                 required
                 className="w-full"
               />
-            </div>
-            <div className="space-y-2">
+          </div>
+          <div className="space-y-2">
               <Label htmlFor="discountAmount">İndirim Tutarı</Label>
-              <Input
+            <Input
                 id="discountAmount"
                 type="number"
                 step="0.01"
@@ -501,9 +501,9 @@ function OfferFormDialog({
                 value={formData.discountAmount}
                 onChange={(e) => setFormData({ ...formData, discountAmount: Number(e.target.value) })}
                 className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
+            />
+          </div>
+          <div className="space-y-2">
               <Label htmlFor="status">Durum *</Label>
               <Select
                 value={formData.status}
@@ -645,17 +645,17 @@ function OfferDetailDialog({ offer }: { offer: Offer }) {
             : `Asansör #${offer.elevatorId}`}
         </DialogDescription>
       </DialogHeader>
-        <div className="space-y-4 py-4">
+      <div className="space-y-4 py-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+          <div>
               <Label className="text-muted-foreground">Asansör</Label>
               <p className="font-medium">
                 {offer.elevator 
                   ? `${offer.elevator.kimlikNo} - ${offer.elevator.bina}`
                   : `#${offer.elevatorId}`}
               </p>
-            </div>
-            <div>
+          </div>
+          <div>
               <Label className="text-muted-foreground">Durum</Label>
               <p className="font-medium">
                 <Badge variant={status.variant}>{status.label}</Badge>
