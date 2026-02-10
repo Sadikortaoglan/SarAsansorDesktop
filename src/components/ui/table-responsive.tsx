@@ -57,24 +57,33 @@ export function TableResponsive<T extends Record<string, any>>({
           </TableHeader>
           <TableBody>
             {data.length > 0 ? (
-              data.map((item, index) => (
-                <TableRow 
-                  key={keyExtractor(item)}
-                  className={cn(
-                    'transition-colors duration-150',
-                    index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50',
-                    'hover:bg-gradient-to-r hover:from-indigo-50/50 hover:to-teal-50/50 hover:shadow-sm'
-                  )}
-                >
-                  {columns.map((column) => (
-                    <TableCell key={column.key} className="py-3">
-                      {column.render
-                        ? column.render(item)
-                        : item[column.key] ?? '-'}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              data.map((item, index) => {
+                // Check if row is critical (expired, failed, open status)
+                const isCritical = 
+                  (item.durum === 'EXPIRED' || item.durum === 'FAILED' || item.durum === 'OPEN' || 
+                   item.sonuc === 'FAIL' || item.sonuc === 'FAILED' || item.status === 'OPEN')
+                
+                return (
+                  <TableRow 
+                    key={keyExtractor(item)}
+                    className={cn(
+                      'transition-all duration-150 relative group',
+                      index % 2 === 0 ? 'bg-white' : 'bg-[#F8FAFC]',
+                      isCritical 
+                        ? 'bg-[#FEF2F2] border-l-2 border-l-[#EF4444]' 
+                        : 'hover:bg-[#F8FAFF] hover:border-l-2 hover:border-l-[#4F46E5]'
+                    )}
+                  >
+                    {columns.map((column) => (
+                      <TableCell key={column.key} className="py-3">
+                        {column.render
+                          ? column.render(item)
+                          : item[column.key] ?? '-'}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )
+              })
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="text-center text-muted-foreground py-8">

@@ -19,10 +19,11 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Eye, Edit, Trash2, Search, Wrench } from 'lucide-react'
+import { Plus, Search, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { formatDateShort, cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
+import { ActionButtons } from '@/components/ui/action-buttons'
 
 export function ElevatorsPage() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -79,12 +80,27 @@ export function ElevatorsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'EXPIRED':
-        return <Badge variant="expired">Süresi Geçti</Badge>
+        return (
+          <Badge variant="expired" className="flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Süresi Geçti
+          </Badge>
+        )
       case 'WARNING':
-        return <Badge variant="warning">Uyarı</Badge>
+        return (
+          <Badge variant="warning" className="flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Uyarı
+          </Badge>
+        )
       case 'OK':
       case 'ACTIVE':
-        return <Badge variant="active">Aktif</Badge>
+        return (
+          <Badge variant="active" className="flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Aktif
+          </Badge>
+        )
       default:
         return <Badge variant="default">{status}</Badge>
     }
@@ -264,36 +280,18 @@ export function ElevatorsPage() {
               mobilePriority: 1,
               hideOnMobile: false,
               render: (elevator: Elevator) => (
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setElevatorForMaintenance(elevator)
-                            setIsMaintenanceDialogOpen(true)
-                          }}
-                          className="h-11 w-11 sm:h-10 sm:w-10"
-                          title="Bakım Ekle"
-                        >
-                          <Wrench className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => navigate(`/elevators/${elevator.id}`)}
-                          className="h-11 w-11 sm:h-10 sm:w-10"
-                          title="Detay"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                    onClick={async () => {
+                <div className="flex items-center justify-end">
+                  <ActionButtons
+                    onMaintenance={() => {
+                      setElevatorForMaintenance(elevator)
+                      setIsMaintenanceDialogOpen(true)
+                    }}
+                    onView={() => navigate(`/elevators/${elevator.id}`)}
+                    onEdit={async () => {
                       try {
                         const freshElevator = await elevatorService.getById(elevator.id)
                         setSelectedElevator(freshElevator)
-                            setIsDialogOpen(true)
+                        setIsDialogOpen(true)
                       } catch (error) {
                         toast({
                           title: 'Hata',
@@ -302,21 +300,9 @@ export function ElevatorsPage() {
                         })
                       }
                     }}
-                    className="h-11 w-11 sm:h-10 sm:w-10"
-                          title="Düzenle"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(elevator.id)}
-                    className="h-11 w-11 sm:h-10 sm:w-10"
-                          title="Sil"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
+                    onDelete={() => handleDelete(elevator.id)}
+                  />
+                </div>
               ),
             },
           ]}

@@ -75,24 +75,24 @@ export function InspectionsPage() {
     
     if (normalizedResult === 'PASS' || normalizedResult === 'PASSED') {
       return (
-        <Badge variant="active" className="flex items-center gap-1">
-          <CheckCircle2 className="h-3 w-3" />
+        <Badge variant="passed" className="flex items-center gap-1.5">
+          <CheckCircle2 className="h-3.5 w-3.5" />
           Geçti
         </Badge>
       )
     }
     if (normalizedResult === 'FAIL' || normalizedResult === 'FAILED') {
       return (
-        <Badge variant="destructive" className="flex items-center gap-1">
-          <XCircle className="h-3 w-3" />
+        <Badge variant="failed" className="flex items-center gap-1.5">
+          <XCircle className="h-3.5 w-3.5" />
           Geçmedi
         </Badge>
       )
     }
     if (normalizedResult === 'PENDING') {
       return (
-        <Badge variant="pending" className="flex items-center gap-1">
-          <Clock className="h-3 w-3" />
+        <Badge variant="pending" className="flex items-center gap-1.5">
+          <Clock className="h-3.5 w-3.5" />
           Beklemede
         </Badge>
       )
