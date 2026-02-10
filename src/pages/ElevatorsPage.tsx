@@ -19,11 +19,10 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Eye, Edit, Trash2, Search, Wrench, X } from 'lucide-react'
+import { Plus, Eye, Edit, Trash2, Search, Wrench } from 'lucide-react'
 import { formatDateShort, cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { maintenanceService, type LabelType } from '@/services/maintenance.service'
-import { useAuth } from '@/contexts/AuthContext'
+import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
 
 export function ElevatorsPage() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -238,7 +237,16 @@ export function ElevatorsPage() {
               header: 'Bitiş Tarihi',
               mobileLabel: 'Bitiş Tarihi',
               mobilePriority: 4,
-              render: (elevator: Elevator) => formatDateShort(elevator.bitisTarihi),
+              render: (elevator: Elevator) => {
+                // Debug: Log elevator data to verify expiryDate exists
+                console.log('Elevator row data:', {
+                  id: elevator.id,
+                  kimlikNo: elevator.kimlikNo,
+                  bitisTarihi: elevator.bitisTarihi,
+                })
+                // Format expiryDate as DD.MM.YYYY, show "-" if null/empty
+                return elevator.bitisTarihi ? formatDateShort(elevator.bitisTarihi) : '-'
+              },
             },
             {
               key: 'durum',
@@ -327,19 +335,22 @@ export function ElevatorsPage() {
       />
 
       <Dialog open={isMaintenanceDialogOpen} onOpenChange={setIsMaintenanceDialogOpen}>
-        <MaintenanceFormDialog
-          elevator={elevatorForMaintenance}
-          onClose={() => {
-            setIsMaintenanceDialogOpen(false)
-            setElevatorForMaintenance(null)
-          }}
-          onSuccess={() => {
-            setIsMaintenanceDialogOpen(false)
-            setElevatorForMaintenance(null)
-            queryClient.invalidateQueries({ queryKey: ['elevators'] })
-            queryClient.invalidateQueries({ queryKey: ['maintenances'] })
-          }}
-        />
+        {elevatorForMaintenance && (
+          <MaintenanceFormDialog
+            elevatorId={elevatorForMaintenance.id}
+            elevatorName={`${elevatorForMaintenance.kimlikNo} - ${elevatorForMaintenance.bina}`}
+            onClose={() => {
+              setIsMaintenanceDialogOpen(false)
+              setElevatorForMaintenance(null)
+            }}
+            onSuccess={() => {
+              setIsMaintenanceDialogOpen(false)
+              setElevatorForMaintenance(null)
+              queryClient.invalidateQueries({ queryKey: ['elevators'] })
+              queryClient.invalidateQueries({ queryKey: ['maintenances'] })
+            }}
+          />
+        )}
       </Dialog>
     </div>
   )
@@ -362,6 +373,7 @@ function ElevatorFormDialog({
     labelType: '' as ElevatorLabelType | '',
     labelDate: '',
     endDate: '',
+    managerName: '',
     managerTcIdentityNumber: '',
     managerPhoneNumber: '',
   })
@@ -384,6 +396,7 @@ function ElevatorFormDialog({
         labelType: (elevator.labelType || '') as ElevatorLabelType | '',
         labelDate: labelDate ? labelDate.split('T')[0] : '',
         endDate: endDate ? endDate.split('T')[0] : '',
+        managerName: elevator.managerName || '',
         managerTcIdentityNumber: elevator.managerTc || '',
         managerPhoneNumber: elevator.managerPhone || '',
       })
@@ -396,6 +409,7 @@ function ElevatorFormDialog({
         labelType: '' as ElevatorLabelType | '',
         labelDate: '',
         endDate: '',
+        managerName: '',
         managerTcIdentityNumber: '',
         managerPhoneNumber: '',
       })
@@ -452,6 +466,10 @@ function ElevatorFormDialog({
       }
     }
     
+    if (!formData.managerName || !formData.managerName.trim()) {
+      newErrors.managerName = 'Yönetici adı zorunludur'
+    }
+    
     if (!formData.managerTcIdentityNumber) {
       newErrors.managerTcIdentityNumber = 'Yönetici TC Kimlik No zorunludur'
     } else {
@@ -483,6 +501,7 @@ function ElevatorFormDialog({
         labelType: data.labelType as ElevatorLabelType,
         labelDate: data.labelDate,
         endDate: data.endDate,
+        managerName: data.managerName,
         managerTcIdentityNumber: data.managerTcIdentityNumber,
         managerPhoneNumber: normalizedPhone, // Send normalized phone
       })
@@ -520,6 +539,7 @@ function ElevatorFormDialog({
         labelType: data.labelType as ElevatorLabelType,
         labelDate: data.labelDate,
         endDate: data.endDate,
+        managerName: data.managerName,
         managerTcIdentityNumber: data.managerTcIdentityNumber,
         managerPhoneNumber: normalizedPhone, // Send normalized phone
       })
@@ -598,8 +618,11 @@ function ElevatorFormDialog({
       formData.labelDate &&
       formData.endDate && // End Date is mandatory
       !errors.endDate && // No validation errors for end date
+      !errors.managerName &&
       !errors.managerTcIdentityNumber &&
       !errors.managerPhoneNumber &&
+      formData.managerName &&
+      formData.managerName.trim() &&
       formData.managerTcIdentityNumber &&
       formData.managerPhoneNumber
     )
@@ -747,6 +770,24 @@ function ElevatorFormDialog({
             <h3 className="text-lg font-semibold">Yönetici Bilgileri</h3>
             
             <div className="space-y-2">
+              <Label htmlFor="managerName">Yönetici Adı *</Label>
+              <Input
+                id="managerName"
+                value={formData.managerName}
+                onChange={(e) => {
+                  setFormData({ ...formData, managerName: e.target.value })
+                  setErrors({ ...errors, managerName: '' })
+                }}
+                required
+                className={cn('w-full', errors.managerName && 'border-destructive')}
+                placeholder="Yönetici adı ve soyadı"
+              />
+              {errors.managerName && (
+                <p className="text-sm text-destructive">{errors.managerName}</p>
+              )}
+            </div>
+            
+            <div className="space-y-2">
               <Label htmlFor="managerTcIdentityNumber">Yönetici TC Kimlik No *</Label>
               <Input
                 id="managerTcIdentityNumber"
@@ -814,221 +855,3 @@ function ElevatorFormDialog({
   )
 }
 
-function MaintenanceFormDialog({
-  elevator,
-  onClose,
-  onSuccess,
-}: {
-  elevator: Elevator | null
-  onClose: () => void
-  onSuccess: () => void
-}) {
-  const { user } = useAuth()
-  const [formData, setFormData] = useState({
-    tarih: new Date().toISOString().split('T')[0],
-    labelType: 'GREEN' as LabelType,
-    aciklama: '',
-    ucret: 0,
-    teknisyenUserId: user?.id ? String(user.id) : '',
-    photos: [] as File[],
-  })
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
-
-  // Auto-fill technician from logged-in user
-  useEffect(() => {
-    if (user?.id) {
-      setFormData((prev) => ({ ...prev, teknisyenUserId: String(user.id) }))
-    }
-  }, [user])
-
-  const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => {
-      if (!elevator) throw new Error('Elevator ID required')
-      return maintenanceService.create({
-        elevatorId: elevator.id,
-        tarih: data.tarih,
-        labelType: data.labelType,
-        aciklama: data.aciklama,
-        ucret: data.ucret,
-        teknisyenUserId: data.teknisyenUserId ? Number(data.teknisyenUserId) : undefined,
-        photos: data.photos.length > 0 ? data.photos : undefined,
-      })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['maintenances'] })
-      queryClient.invalidateQueries({ queryKey: ['elevators'] })
-      toast({
-        title: 'Başarılı',
-        description: 'Bakım kaydı başarıyla eklendi.',
-        variant: 'success',
-      })
-      onSuccess()
-    },
-    onError: () => {
-      toast({
-        title: 'Hata',
-        description: 'Bakım kaydı eklenirken bir hata oluştu.',
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Validate minimum 4 photos
-    if (formData.photos.length < 4) {
-      setPhotoError('En az 4 fotoğraf yüklenmelidir')
-      toast({
-        title: 'Hata',
-        description: 'En az 4 fotoğraf yüklenmelidir.',
-        variant: 'destructive',
-      })
-      return
-    }
-    
-    setPhotoError('')
-    createMutation.mutate(formData)
-  }
-
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files)
-      setFormData({ ...formData, photos: [...formData.photos, ...files] })
-    }
-  }
-
-  const [photoError, setPhotoError] = useState<string>('')
-
-  if (!elevator) return null
-
-  return (
-    <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle>Yeni Bakım Ekle</DialogTitle>
-        <DialogDescription>
-          {elevator.kimlikNo} - {elevator.bina}
-        </DialogDescription>
-      </DialogHeader>
-      <form onSubmit={handleSubmit}>
-        <div className="grid gap-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="tarih">Bakım Tarihi *</Label>
-            <Input
-              id="tarih"
-              type="date"
-              value={formData.tarih}
-              onChange={(e) => setFormData({ ...formData, tarih: e.target.value })}
-              required
-              className="w-full"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="labelType">Etiket Tipi *</Label>
-            <Select
-              value={formData.labelType}
-              onValueChange={(value) => setFormData({ ...formData, labelType: value as LabelType })}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="GREEN">Yeşil</SelectItem>
-                <SelectItem value="BLUE">Mavi</SelectItem>
-                <SelectItem value="YELLOW">Sarı</SelectItem>
-                <SelectItem value="RED">Kırmızı</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="aciklama">Açıklama *</Label>
-            <Input
-              id="aciklama"
-              value={formData.aciklama}
-              onChange={(e) => setFormData({ ...formData, aciklama: e.target.value })}
-              required
-              className="w-full"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ucret">Ücret *</Label>
-            <Input
-              id="ucret"
-              type="number"
-              step="0.01"
-              value={formData.ucret}
-              onChange={(e) => setFormData({ ...formData, ucret: Number(e.target.value) })}
-              required
-              className="w-full"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="teknisyenUserId">Teknisyen</Label>
-            <Input
-              id="teknisyenUserId"
-              value={user?.username || 'Otomatik doldurulacak (Giriş yapan kullanıcı)'}
-              disabled
-              className="w-full bg-muted"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="photos">Fotoğraflar * (Minimum 4 adet)</Label>
-            <div className="border-2 border-dashed rounded-lg p-4">
-              <Input
-                id="photos"
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handlePhotoChange}
-                className="w-full"
-              />
-              <div className="mt-2 text-sm text-muted-foreground">
-                Seçilen fotoğraf sayısı: {formData.photos.length} / 4 (minimum)
-              </div>
-              {photoError && (
-                <p className="mt-2 text-sm text-destructive">{photoError}</p>
-              )}
-              {formData.photos.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  {formData.photos.map((photo, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                      <span className="text-sm truncate flex-1">{photo.name}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setFormData({
-                            ...formData,
-                            photos: formData.photos.filter((_, i) => i !== index),
-                          })
-                          setPhotoError('')
-                        }}
-                        className="h-8 w-8"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto min-h-[44px]">
-            İptal
-          </Button>
-          <Button 
-            type="submit" 
-            disabled={createMutation.isPending || formData.photos.length < 4} 
-            className="w-full sm:w-auto min-h-[44px]"
-          >
-            {createMutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
-          </Button>
-        </DialogFooter>
-      </form>
-    </DialogContent>
-  )
-}

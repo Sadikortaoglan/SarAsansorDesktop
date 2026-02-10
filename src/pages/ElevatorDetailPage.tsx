@@ -9,20 +9,15 @@ import { TableResponsive } from '@/components/ui/table-responsive'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import { formatDate, formatDateShort, formatCurrency } from '@/lib/utils'
+import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
 
 export function ElevatorDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -31,6 +26,7 @@ export function ElevatorDetailPage() {
   const { toast } = useToast()
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [maintenanceToDelete, setMaintenanceToDelete] = useState<number | null>(null)
+  const [isMaintenanceDialogOpen, setIsMaintenanceDialogOpen] = useState(false)
 
   const { data: elevator, isLoading } = useQuery({
     queryKey: ['elevator', id],
@@ -165,47 +161,43 @@ export function ElevatorDetailPage() {
       </div>
 
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-        {(elevator.managerName || elevator.managerTc || elevator.managerPhone || elevator.managerEmail) && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Yönetici Bilgileri</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {elevator.managerName && (
-                <div>
-                  <Label className="text-muted-foreground">Yönetici Adı</Label>
-                  <p className="text-lg font-medium">{elevator.managerName}</p>
-                </div>
-              )}
-              {elevator.managerTc && (
-                <div>
-                  <Label className="text-muted-foreground">TC Kimlik No</Label>
-                  <p className="text-lg font-medium">{elevator.managerTc}</p>
-                </div>
-              )}
-              {elevator.managerPhone && (
-                <div>
-                  <Label className="text-muted-foreground">Telefon</Label>
-                  <p className="text-lg font-medium">
-                    <a href={`tel:${elevator.managerPhone}`} className="text-primary hover:underline">
-                      {elevator.managerPhone}
-                    </a>
-                  </p>
-                </div>
-              )}
-              {elevator.managerEmail && (
-                <div>
-                  <Label className="text-muted-foreground">E-posta</Label>
-                  <p className="text-lg font-medium">
-                    <a href={`mailto:${elevator.managerEmail}`} className="text-primary hover:underline">
-                      {elevator.managerEmail}
-                    </a>
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader>
+            <CardTitle>Yönetici Bilgileri</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label className="text-muted-foreground">Yönetici Adı</Label>
+              <p className="text-lg font-medium">{elevator.managerName || '-'}</p>
+            </div>
+            <div>
+              <Label className="text-muted-foreground">TC Kimlik No</Label>
+              <p className="text-lg font-medium">{elevator.managerTc || '-'}</p>
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Telefon</Label>
+              <p className="text-lg font-medium">
+                {elevator.managerPhone ? (
+                  <a href={`tel:${elevator.managerPhone}`} className="text-primary hover:underline">
+                    {elevator.managerPhone}
+                  </a>
+                ) : (
+                  '-'
+                )}
+              </p>
+            </div>
+            {elevator.managerEmail && (
+              <div>
+                <Label className="text-muted-foreground">E-posta</Label>
+                <p className="text-lg font-medium">
+                  <a href={`mailto:${elevator.managerEmail}`} className="text-primary hover:underline">
+                    {elevator.managerEmail}
+                  </a>
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {(elevator.currentAccountId || elevator.currentAccountName) && (
           <Card>
@@ -251,16 +243,19 @@ export function ElevatorDetailPage() {
             <CardTitle>Bakım Geçmişi</CardTitle>
             <CardDescription>Bu asansörün bakım kayıtları</CardDescription>
           </div>
-          <Dialog>
+          <Dialog open={isMaintenanceDialogOpen} onOpenChange={setIsMaintenanceDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => setIsMaintenanceDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Yeni Bakım Ekle
               </Button>
             </DialogTrigger>
             <MaintenanceFormDialog
               elevatorId={Number(id)}
+              elevatorName={`${elevator.kimlikNo} - ${elevator.bina}`}
+              onClose={() => setIsMaintenanceDialogOpen(false)}
               onSuccess={() => {
+                setIsMaintenanceDialogOpen(false)
                 queryClient.invalidateQueries({ queryKey: ['maintenances', 'elevator', id] })
               }}
             />
@@ -369,97 +364,4 @@ export function ElevatorDetailPage() {
   )
 }
 
-function MaintenanceFormDialog({
-  elevatorId,
-  onSuccess,
-}: {
-  elevatorId: number
-  onSuccess: () => void
-}) {
-  const [formData, setFormData] = useState({
-    tarih: new Date().toISOString().split('T')[0],
-    aciklama: '',
-    ucret: 0,
-  })
-  const { toast } = useToast()
-
-  const createMutation = useMutation({
-    mutationFn: (data: typeof formData) =>
-      maintenanceService.create({ ...data, elevatorId }),
-    onSuccess: () => {
-      toast({
-        title: 'Başarılı',
-        description: 'Bakım kaydı başarıyla eklendi.',
-        variant: 'success',
-      })
-      onSuccess()
-    },
-    onError: () => {
-      toast({
-        title: 'Hata',
-        description: 'Bakım kaydı eklenirken bir hata oluştu.',
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    createMutation.mutate(formData)
-  }
-
-  return (
-    <DialogContent className="w-[95vw] max-h-[90vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle>Yeni Bakım Ekle</DialogTitle>
-        <DialogDescription>Bakım bilgilerini girin</DialogDescription>
-      </DialogHeader>
-      <form onSubmit={handleSubmit}>
-        <div className="grid gap-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="tarih">Tarih *</Label>
-            <Input
-              id="tarih"
-              type="date"
-              value={formData.tarih}
-              onChange={(e) => setFormData({ ...formData, tarih: e.target.value })}
-              required
-              className="w-full"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="aciklama">Açıklama *</Label>
-            <Input
-              id="aciklama"
-              value={formData.aciklama}
-              onChange={(e) => setFormData({ ...formData, aciklama: e.target.value })}
-              required
-              className="w-full"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ucret">Ücret *</Label>
-            <Input
-              id="ucret"
-              type="number"
-              step="0.01"
-              value={formData.ucret}
-              onChange={(e) => setFormData({ ...formData, ucret: Number(e.target.value) })}
-              required
-              className="w-full"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => {}} className="w-full sm:w-auto min-h-[44px] hidden">
-            İptal
-          </Button>
-          <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
-            Ekle
-          </Button>
-        </DialogFooter>
-      </form>
-    </DialogContent>
-  )
-}
 

@@ -20,6 +20,8 @@ export interface Inspection {
   aciklama?: string
   raporNo?: string
   olusturmaTarihi: string
+  inspectionColor?: 'GREEN' | 'YELLOW' | 'RED' | 'ORANGE' // Asansör rengi
+  contactedPersonName?: string // Görüşülen kişi
 }
 
 export interface CreateInspectionRequest {
@@ -29,6 +31,8 @@ export interface CreateInspectionRequest {
   sonuc: 'PASS' | 'FAIL' | 'PENDING' // Backend'e BAŞARILI/BAŞARISIZ/BEKLENİYOR olarak gönderilecek
   aciklama?: string
   raporNo?: string
+  inspectionColor: 'GREEN' | 'YELLOW' | 'RED' | 'ORANGE' // Asansör rengi (zorunlu)
+  contactedPersonName?: string // Görüşülen kişi (opsiyonel)
 }
 
 // Backend sonuc formatını frontend formatına çevir
@@ -53,37 +57,61 @@ function mapInspectionResultToBackend(result: 'PASS' | 'FAIL' | 'PENDING'): stri
 
 // Backend'den gelen formatı frontend formatına çevir
 // YENİ BACKEND FIELD İSİMLERİ (eski field'lar KULLANILMIYOR):
-// elevatorIdentityNumber, elevatorBuildingName, date, result, description
+// elevatorIdentityNumber, elevatorBuildingName, date, result, description, inspectionColor, contactedPersonName
 function mapInspectionFromBackend(backend: any): Inspection {
+  // Inspection color mapping - Backend'den direkt inspectionColor geliyor
+  const inspectionColor = backend.inspectionColor || backend.inspection_color
+    ? (backend.inspectionColor || backend.inspection_color).toUpperCase().trim() as 'GREEN' | 'YELLOW' | 'RED' | 'ORANGE'
+    : undefined
+
+  // Contacted person name mapping
+  const contactedPersonName = backend.contactedPersonName || backend.contacted_person_name || undefined
+
+  // Debug: Log backend data
+  console.log('Mapping inspection from backend:', {
+    id: backend.id,
+    inspectionColor: backend.inspectionColor,
+    contactedPersonName: backend.contactedPersonName,
+    result: backend.result,
+  })
+
   return {
     id: backend.id,
     elevatorId: backend.elevatorId || backend.elevator?.id || 0,
-    elevatorIdentityNumber: backend.elevatorIdentityNumber || backend.elevator?.identityNumber || '',
+    // Backend returns: elevatorCode, elevatorIdentityNumber
+    elevatorIdentityNumber: backend.elevatorCode || backend.elevatorIdentityNumber || backend.elevator?.identityNumber || '',
     elevatorBuildingName: backend.elevatorBuildingName || backend.elevator?.buildingName || '',
     elevator: backend.elevator ? {
       id: backend.elevator.id,
-      kimlikNo: backend.elevator.identityNumber || backend.elevatorIdentityNumber || '',
+      kimlikNo: backend.elevator.identityNumber || backend.elevatorCode || backend.elevatorIdentityNumber || '',
       bina: backend.elevator.buildingName || backend.elevatorBuildingName || '',
       binaAdi: backend.elevator.buildingName || backend.elevatorBuildingName,
       adres: backend.elevator.address || '',
     } : undefined,
-    denetimTarihi: backend.date || '',
+    // Backend returns: inspectionDate (prioritize this)
+    denetimTarihi: backend.inspectionDate || backend.date || '',
     denetimYapan: backend.denetimYapan,
-    sonuc: mapInspectionResultFromBackend(backend.result || 'BEKLENİYOR'),
+    // Backend returns: result (PASSED, FAILED, PENDING)
+    sonuc: mapInspectionResultFromBackend(backend.result || 'PENDING'),
     aciklama: backend.description,
     raporNo: backend.raporNo,
     olusturmaTarihi: backend.createdAt || backend.olusturmaTarihi || '',
+    // Backend returns: inspectionColor, contactedPersonName
+    inspectionColor,
+    contactedPersonName,
   }
 }
 
 // Frontend formatını backend formatına çevir
 function mapInspectionToBackend(inspection: CreateInspectionRequest): any {
-  // Yeni backend field isimleri: date, result, description
+  // Yeni backend field isimleri: date, result, description, inspectionColor, contactedPersonName
   return {
     elevatorId: inspection.elevatorId,
     date: inspection.denetimTarihi,
     result: mapInspectionResultToBackend(inspection.sonuc),
     description: inspection.aciklama || undefined,
+    inspectionColor: inspection.inspectionColor,
+    contactedPersonName: inspection.contactedPersonName || undefined,
   }
 }
 

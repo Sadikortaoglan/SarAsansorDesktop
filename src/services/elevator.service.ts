@@ -51,6 +51,7 @@ export interface CreateElevatorRequest {
   labelType: LabelType
   labelDate: string
   endDate: string
+  managerName: string
   managerTcIdentityNumber: string
   managerPhoneNumber: string
 }
@@ -64,7 +65,8 @@ function mapElevatorFromBackend(backend: any): Elevator {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const inspectionDate = backend.inspectionDate || ''
-  const bitisTarihi = backend.bitisTarihi || backend.endDate || inspectionDate
+  // Backend'den expiryDate geliyor, önce onu kontrol et
+  const bitisTarihi = backend.expiryDate || backend.bitisTarihi || backend.endDate || inspectionDate
   const endDate = new Date(bitisTarihi)
   endDate.setHours(0, 0, 0, 0)
   const daysUntilExpiry = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
@@ -102,7 +104,7 @@ function mapElevatorFromBackend(backend: any): Elevator {
     labelDate: backend.labelDate || backend.label_date || backend.inspectionDate || '',
     blueLabel: backend.blueLabel ?? backend.blue_label ?? false,
     maviEtiketTarihi: backend.inspectionDate || '',
-    bitisTarihi: backend.bitisTarihi || '',
+    bitisTarihi: backend.expiryDate || backend.bitisTarihi || backend.endDate || '', // Backend'den expiryDate geliyor
     durum,
     // Yeni backend field'ları
     binaAdi: backend.buildingName,
@@ -119,11 +121,11 @@ function mapElevatorFromBackend(backend: any): Elevator {
     kumanda: backend.kumanda,
     halat: backend.halat,
     modernizasyon: backend.modernizasyon,
-    // Manager Information
-    managerName: backend.managerName || backend.manager_name,
-    managerTc: backend.managerTc || backend.manager_tc || backend.managerTcIdentity,
-    managerPhone: backend.managerPhone || backend.manager_phone,
-    managerEmail: backend.managerEmail || backend.manager_email,
+    // Manager Information - Backend returns: managerName, managerTcIdentityNo, managerPhone, managerEmail
+    managerName: backend.managerName || backend.manager_name || undefined,
+    managerTc: backend.managerTcIdentityNo || backend.managerTcIdentity || backend.manager_tc || backend.managerTc || undefined,
+    managerPhone: backend.managerPhone || backend.manager_phone || undefined,
+    managerEmail: backend.managerEmail || backend.manager_email || undefined,
     // Current Account Information
     currentAccountId: backend.currentAccountId || backend.current_account_id,
     currentAccountName: backend.currentAccountName || backend.current_account_name,
@@ -144,7 +146,24 @@ export const elevatorService = {
   getById: async (id: number): Promise<Elevator> => {
     const { data } = await apiClient.get<ApiResponse<any>>(`/elevators/${id}`)
     const unwrapped = unwrapResponse(data)
-    return mapElevatorFromBackend(unwrapped)
+    // Debug: Log backend response for manager fields
+    console.log('Elevator getById backend response:', {
+      id: unwrapped.id,
+      managerName: unwrapped.managerName,
+      managerTcIdentityNo: unwrapped.managerTcIdentityNo,
+      managerPhone: unwrapped.managerPhone,
+      managerEmail: unwrapped.managerEmail,
+    })
+    const mapped = mapElevatorFromBackend(unwrapped)
+    // Debug: Log mapped elevator
+    console.log('Mapped elevator:', {
+      id: mapped.id,
+      managerName: mapped.managerName,
+      managerTc: mapped.managerTc,
+      managerPhone: mapped.managerPhone,
+      managerEmail: mapped.managerEmail,
+    })
+    return mapped
   },
 
   getStatus: async (id: number): Promise<'EXPIRED' | 'WARNING' | 'OK'> => {
@@ -158,7 +177,7 @@ export const elevatorService = {
   },
 
   create: async (elevator: CreateElevatorRequest): Promise<Elevator> => {
-    // Backend field isimleri: identityNumber, buildingName, address, elevatorNumber, labelType, labelDate, expiryDate, managerTcIdentityNo, managerPhone
+    // Backend field isimleri: identityNumber, buildingName, address, elevatorNumber, labelType, labelDate, expiryDate, managerName, managerTcIdentityNo, managerPhone
     const backendRequest: any = {
       identityNumber: elevator.kimlikNo,
       buildingName: elevator.bina,
@@ -167,6 +186,7 @@ export const elevatorService = {
       labelType: elevator.labelType,
       labelDate: elevator.labelDate,
       expiryDate: elevator.endDate, // Backend expects expiryDate, not endDate
+      managerName: elevator.managerName, // Backend expects managerName
       managerTcIdentityNo: elevator.managerTcIdentityNumber, // Backend expects managerTcIdentityNo
       managerPhone: elevator.managerPhoneNumber, // Backend expects managerPhone
     }
@@ -188,6 +208,7 @@ export const elevatorService = {
     if (elevator.labelType !== undefined) backendRequest.labelType = elevator.labelType
     if (elevator.labelDate !== undefined) backendRequest.labelDate = elevator.labelDate
     if (elevator.endDate !== undefined) backendRequest.expiryDate = elevator.endDate // Backend expects expiryDate
+    if (elevator.managerName !== undefined) backendRequest.managerName = elevator.managerName // Backend expects managerName
     if (elevator.managerTcIdentityNumber !== undefined) backendRequest.managerTcIdentityNo = elevator.managerTcIdentityNumber
     if (elevator.managerPhoneNumber !== undefined) backendRequest.managerPhone = elevator.managerPhoneNumber
     

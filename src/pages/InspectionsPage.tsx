@@ -33,14 +33,36 @@ export function InspectionsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: inspections, isLoading } = useQuery({
+  const { data: inspections, isLoading, refetch } = useQuery({
     queryKey: ['inspections'],
     queryFn: () => inspectionService.getAll(),
   })
 
   // Güvenli array kontrolü
   const inspectionsArray = Array.isArray(inspections) ? inspections : []
-  const filteredInspections = inspectionsArray.filter(
+  
+  // Debug: Log inspections data - MANDATORY DEBUG STEP
+  console.log('Inspections array:', inspectionsArray)
+  inspectionsArray.forEach((inspection, index) => {
+    console.log(`Inspection row ${index}:`, {
+      id: inspection.id,
+      inspectionColor: inspection.inspectionColor,
+      contactedPersonName: inspection.contactedPersonName,
+      sonuc: inspection.sonuc,
+      denetimTarihi: inspection.denetimTarihi,
+      elevatorBuildingName: inspection.elevatorBuildingName,
+      elevatorIdentityNumber: inspection.elevatorIdentityNumber,
+    })
+  })
+  
+  // Sort by inspectionDate DESC (newest first)
+  const sortedInspections = [...inspectionsArray].sort((a, b) => {
+    const dateA = new Date(a.denetimTarihi || '').getTime()
+    const dateB = new Date(b.denetimTarihi || '').getTime()
+    return dateB - dateA // DESC order
+  })
+  
+  const filteredInspections = sortedInspections.filter(
     (inspection) =>
       inspection.elevatorIdentityNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       inspection.elevatorBuildingName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -48,30 +70,56 @@ export function InspectionsPage() {
   )
 
   const getResultBadge = (result: string) => {
-    switch (result) {
-      case 'PASS':
-        return (
-          <Badge variant="success" className="flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" />
-            Geçti
-          </Badge>
-        )
-      case 'FAIL':
-        return (
-          <Badge variant="destructive" className="flex items-center gap-1">
-            <XCircle className="h-3 w-3" />
-            Geçmedi
-          </Badge>
-        )
-      case 'PENDING':
-        return (
-          <Badge variant="warning" className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            Beklemede
-          </Badge>
-        )
+    // Normalize result to handle both PASS/PASSED and FAIL/FAILED
+    const normalizedResult = result?.toUpperCase() || 'PENDING'
+    
+    if (normalizedResult === 'PASS' || normalizedResult === 'PASSED') {
+      return (
+        <Badge variant="success" className="flex items-center gap-1">
+          <CheckCircle2 className="h-3 w-3" />
+          Geçti
+        </Badge>
+      )
+    }
+    if (normalizedResult === 'FAIL' || normalizedResult === 'FAILED') {
+      return (
+        <Badge variant="destructive" className="flex items-center gap-1">
+          <XCircle className="h-3 w-3" />
+          Geçmedi
+        </Badge>
+      )
+    }
+    if (normalizedResult === 'PENDING') {
+      return (
+        <Badge variant="warning" className="flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          Beklemede
+        </Badge>
+      )
+    }
+    return <Badge>{result}</Badge>
+  }
+
+  // Inspection color badge - Elevator list'teki gibi
+  const getInspectionColorBadge = (color?: string) => {
+    // Defensive: Check if color exists and is not empty
+    if (!color || !color.trim()) {
+      return <Badge variant="secondary">—</Badge>
+    }
+    
+    const normalizedColor = color.toUpperCase().trim()
+    
+    switch (normalizedColor) {
+      case 'GREEN':
+        return <Badge variant="success">Yeşil</Badge>
+      case 'YELLOW':
+        return <Badge variant="warning">Sarı</Badge>
+      case 'RED':
+        return <Badge variant="expired">Kırmızı</Badge>
+      case 'ORANGE':
+        return <Badge className="bg-orange-500 text-white hover:bg-orange-600">Turuncu</Badge>
       default:
-        return <Badge>{result}</Badge>
+        return <Badge variant="secondary">{color}</Badge>
     }
   }
 
@@ -93,9 +141,11 @@ export function InspectionsPage() {
           </DialogTrigger>
           <InspectionFormDialog
             onClose={() => setIsDialogOpen(false)}
-            onSuccess={() => {
+            onSuccess={async () => {
               setIsDialogOpen(false)
-              queryClient.invalidateQueries({ queryKey: ['inspections'] })
+              // Force refetch to ensure fresh data
+              await queryClient.invalidateQueries({ queryKey: ['inspections'] })
+              await refetch()
             }}
           />
         </Dialog>
@@ -135,40 +185,84 @@ export function InspectionsPage() {
               header: 'Bina',
               mobileLabel: 'Bina',
               mobilePriority: 9,
+              render: (inspection) => inspection.elevatorBuildingName || '-',
             },
             {
               key: 'denetimTarihi',
               header: 'Denetim Tarihi',
               mobileLabel: 'Denetim Tarihi',
               mobilePriority: 8,
-              render: (inspection) => formatDateShort(inspection.denetimTarihi),
+              render: (inspection) => {
+                // Debug: Log row data
+                console.log('Inspection row:', inspection)
+                console.log('inspectionColor:', inspection.inspectionColor)
+                console.log('result/sonuc:', inspection.sonuc)
+                console.log('contactedPersonName:', inspection.contactedPersonName)
+                // Use inspectionDate from backend (mapped to denetimTarihi)
+                return formatDateShort(inspection.denetimTarihi || '')
+              },
             },
             {
-              key: 'denetimYapan',
-              header: 'Denetim Yapan',
-              mobileLabel: 'Denetim Yapan',
+              key: 'inspectionColor',
+              header: 'Asansör Rengi',
+              mobileLabel: 'Renk',
               mobilePriority: 7,
-              hideOnMobile: true,
+              render: (inspection) => {
+                // Use inspectionColor from backend response
+                const color = inspection.inspectionColor
+                console.log('Rendering inspectionColor:', color, 'for inspection ID:', inspection.id)
+                return getInspectionColorBadge(color)
+              },
             },
             {
               key: 'sonuc',
               header: 'Sonuç',
               mobileLabel: 'Sonuç',
               mobilePriority: 6,
-              render: (inspection) => getResultBadge(inspection.sonuc),
+              render: (inspection) => {
+                // Use result from backend (mapped to sonuc)
+                // Backend returns: PASSED, FAILED, PENDING
+                // Frontend uses: PASS, FAIL, PENDING (mapped in service)
+                const result = inspection.sonuc || 'PENDING'
+                console.log('Rendering result:', result, 'for inspection ID:', inspection.id)
+                return getResultBadge(result)
+              },
+            },
+            {
+              key: 'denetimYapan',
+              header: 'Denetim Yapan',
+              mobileLabel: 'Denetim Yapan',
+              mobilePriority: 5,
+              hideOnMobile: true,
+              render: (inspection) => inspection.denetimYapan || '-',
+            },
+            {
+              key: 'contactedPersonName',
+              header: 'Görüşülen Kişi',
+              mobileLabel: 'Görüşülen',
+              mobilePriority: 4,
+              hideOnMobile: true,
+              render: (inspection) => {
+                // Use contactedPersonName from backend response
+                const name = inspection.contactedPersonName
+                console.log('Rendering contactedPersonName:', name, 'for inspection ID:', inspection.id)
+                // Show "-" only if truly null/empty
+                return name && name.trim() ? name : '-'
+              },
             },
             {
               key: 'raporNo',
               header: 'Rapor No',
               mobileLabel: 'Rapor No',
-              mobilePriority: 5,
+              mobilePriority: 3,
               hideOnMobile: true,
+              render: (inspection) => inspection.raporNo || '-',
             },
             {
               key: 'aciklama',
               header: 'Açıklama',
               mobileLabel: 'Açıklama',
-              mobilePriority: 4,
+              mobilePriority: 2,
               render: (inspection) => <span className="max-w-xs truncate block">{inspection.aciklama || '-'}</span>,
             },
           ]}
@@ -193,7 +287,10 @@ function InspectionFormDialog({
     denetimTarihi: new Date().toISOString().split('T')[0],
     sonuc: 'PENDING' as 'PASS' | 'FAIL' | 'PENDING',
     aciklama: '',
+    inspectionColor: '' as 'GREEN' | 'YELLOW' | 'RED' | 'ORANGE' | '',
+    contactedPersonName: '',
   })
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
@@ -206,10 +303,31 @@ function InspectionFormDialog({
   const elevatorsArray = Array.isArray(elevators) ? elevators : []
 
   const createMutation = useMutation({
-    mutationFn: (data: { elevatorId: number; denetimTarihi: string; sonuc: 'PASS' | 'FAIL' | 'PENDING'; aciklama?: string }) =>
+    mutationFn: (data: { elevatorId: number; denetimTarihi: string; sonuc: 'PASS' | 'FAIL' | 'PENDING'; aciklama?: string; inspectionColor: 'GREEN' | 'YELLOW' | 'RED' | 'ORANGE'; contactedPersonName?: string }) =>
       inspectionService.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inspections'] })
+    onSuccess: async (savedInspection) => {
+      // Debug: Log saved inspection response
+      console.log('Saved inspection response:', savedInspection)
+      console.log('Inspection color:', savedInspection.inspectionColor)
+      console.log('Contacted person:', savedInspection.contactedPersonName)
+      console.log('Result:', savedInspection.sonuc)
+      console.log('Full saved inspection object:', JSON.stringify(savedInspection, null, 2))
+      
+      // Reset form first
+      setFormData({
+        elevatorId: '',
+        denetimTarihi: new Date().toISOString().split('T')[0],
+        sonuc: 'PENDING' as 'PASS' | 'FAIL' | 'PENDING',
+        aciklama: '',
+        inspectionColor: '' as 'GREEN' | 'YELLOW' | 'RED' | 'ORANGE' | '',
+        contactedPersonName: '',
+      })
+      setErrors({})
+      
+      // Invalidate and refetch inspections list
+      await queryClient.invalidateQueries({ queryKey: ['inspections'] })
+      await queryClient.refetchQueries({ queryKey: ['inspections'] })
+      
       toast({
         title: 'Başarılı',
         description: 'Denetim başarıyla eklendi.',
@@ -229,14 +347,27 @@ function InspectionFormDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validation
+    const newErrors: Record<string, string> = {}
     if (!formData.elevatorId) {
+      newErrors.elevatorId = 'Lütfen bir asansör seçin.'
+    }
+    if (!formData.inspectionColor) {
+      newErrors.inspectionColor = 'Asansör rengi seçilmelidir.'
+    }
+    
+    setErrors(newErrors)
+    
+    if (Object.keys(newErrors).length > 0) {
       toast({
         title: 'Hata',
-        description: 'Lütfen bir asansör seçin.',
+        description: 'Lütfen zorunlu alanları doldurun.',
         variant: 'destructive',
       })
       return
     }
+    
     // Backend'de sadece: elevatorId, tarih (denetimTarihi), sonuc, aciklama var
     // denetimYapan ve raporNo backend'de yok, gönderilmiyor
     // Not: Backend'de update endpoint'i yok, bu yüzden sadece create yapılabilir
@@ -245,6 +376,8 @@ function InspectionFormDialog({
       denetimTarihi: formData.denetimTarihi,
       sonuc: formData.sonuc,
       aciklama: formData.aciklama || undefined,
+      inspectionColor: formData.inspectionColor as 'GREEN' | 'YELLOW' | 'RED' | 'ORANGE',
+      contactedPersonName: formData.contactedPersonName || undefined,
       // denetimYapan ve raporNo backend'de yok
     }
     // Backend'de update endpoint'i olmadığı için sadece create yapılıyor
@@ -309,6 +442,41 @@ function InspectionFormDialog({
             </div>
           </div>
           <div className="space-y-2">
+            <Label htmlFor="inspectionColor">Asansör Rengi *</Label>
+            <Select
+              value={formData.inspectionColor}
+              onValueChange={(value) => {
+                setFormData({ ...formData, inspectionColor: value as 'GREEN' | 'YELLOW' | 'RED' | 'ORANGE' })
+                setErrors((prev) => ({ ...prev, inspectionColor: '' }))
+              }}
+              required
+            >
+              <SelectTrigger className={`w-full ${errors.inspectionColor ? 'border-destructive' : ''}`}>
+                <SelectValue placeholder="Asansör rengi seçin" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="GREEN">Yeşil</SelectItem>
+                <SelectItem value="YELLOW">Sarı</SelectItem>
+                <SelectItem value="RED">Kırmızı</SelectItem>
+                <SelectItem value="ORANGE">Turuncu</SelectItem>
+              </SelectContent>
+            </Select>
+            {errors.inspectionColor && (
+              <p className="text-sm text-destructive">{errors.inspectionColor}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="contactedPersonName">Görüşülen Kişi</Label>
+            <Input
+              id="contactedPersonName"
+              type="text"
+              placeholder="Görüşülen kişi adı (opsiyonel)"
+              value={formData.contactedPersonName}
+              onChange={(e) => setFormData({ ...formData, contactedPersonName: e.target.value })}
+              className="w-full"
+            />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="aciklama">Açıklama</Label>
             <Input
               id="aciklama"
@@ -322,7 +490,11 @@ function InspectionFormDialog({
           <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto min-h-[44px]">
             İptal
           </Button>
-          <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
+          <Button 
+            type="submit" 
+            disabled={createMutation.isPending || !formData.elevatorId || !formData.inspectionColor} 
+            className="w-full sm:w-auto min-h-[44px]"
+          >
             Ekle
           </Button>
         </DialogFooter>
