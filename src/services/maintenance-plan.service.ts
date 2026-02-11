@@ -10,7 +10,7 @@ export interface MaintenancePlan {
   elevatorCode?: string
   buildingName?: string
   scheduledDate: string // YYYY-MM-DD
-  status: 'PLANNED' | 'COMPLETED' | 'CANCELLED'
+  status: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
   completedDate?: string
   qrCode?: string
   note?: string // Backend'den gelen not
@@ -61,11 +61,16 @@ export const maintenancePlanService = {
     month?: string // YYYY-MM
     year?: number
     elevatorId?: number
-    status?: 'PLANNED' | 'COMPLETED' | 'CANCELLED'
+    status?: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
   }): Promise<MaintenancePlan[]> => {
+    console.log('🔍 MAINTENANCE PLANS GET ALL - Endpoint:', API_ENDPOINTS.MAINTENANCE_PLANS.BASE, 'Params:', params)
     const { data } = await apiClient.get<ApiResponse<any[]>>(API_ENDPOINTS.MAINTENANCE_PLANS.BASE, { params })
+    console.log('📥 MAINTENANCE PLANS GET ALL - Raw response:', JSON.stringify(data, null, 2))
     const unwrapped = unwrapArrayResponse(data)
-    return unwrapped.map(mapPlanFromBackend)
+    console.log('📥 MAINTENANCE PLANS GET ALL - Unwrapped:', unwrapped)
+    const mapped = unwrapped.map(mapPlanFromBackend)
+    console.log('📥 MAINTENANCE PLANS GET ALL - Mapped:', mapped)
+    return mapped
   },
 
   getByMonth: async (year: number, month: number): Promise<MaintenancePlan[]> => {

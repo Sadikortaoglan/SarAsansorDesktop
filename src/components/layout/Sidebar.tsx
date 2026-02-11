@@ -23,6 +23,7 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  List,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -48,37 +49,31 @@ export const menuItems: MenuItem[] = [
     icon: Building2,
     roles: ['PATRON', 'PERSONEL'] as const,
   },
-  {
-    title: 'Bakım İşlemleri',
-    icon: Wrench,
-    roles: ['PATRON', 'PERSONEL'] as const,
-    children: [
       {
-        title: 'Bakım Planla',
-        href: '/maintenances/plan',
-        icon: Calendar,
+        title: 'Bakım İşlemleri',
+        icon: Wrench,
         roles: ['PATRON', 'PERSONEL'] as const,
+        children: [
+          {
+            title: 'Bakım Planla',
+            href: '/maintenances/plan',
+            icon: Calendar,
+            roles: ['PATRON', 'PERSONEL'] as const,
+          },
+          {
+            title: 'Bakım Listesi',
+            href: '/maintenances/list',
+            icon: List,
+            roles: ['PATRON', 'PERSONEL'] as const,
+          },
+          {
+            title: 'Bakım Maddeleri Yönet',
+            href: '/maintenances/items',
+            icon: Settings,
+            roles: ['PATRON', 'PERSONEL'] as const,
+          },
+        ],
       },
-      {
-        title: 'Tamamlananlar',
-        href: '/maintenances/completed',
-        icon: CheckCircle2,
-        roles: ['PATRON', 'PERSONEL'] as const,
-      },
-      {
-        title: 'Tamamlanacaklar',
-        href: '/maintenances/upcoming',
-        icon: Clock,
-        roles: ['PATRON', 'PERSONEL'] as const,
-      },
-      {
-        title: 'Bakım Maddeleri Yönet',
-        href: '/maintenances/items',
-        icon: Settings,
-        roles: ['PATRON', 'PERSONEL'] as const,
-      },
-    ],
-  },
   {
     title: 'Uyarılar',
     href: '/warnings',
@@ -293,8 +288,7 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
     const getBadgeCount = (href: string): number | undefined => {
       if (!counts) return undefined
       if (href === '/maintenances/plan') return counts.maintenancePlansUpcoming
-      if (href === '/maintenances/completed') return counts.maintenanceSessionsCompleted
-      if (href === '/maintenances/upcoming') return counts.maintenancePlansUpcoming
+      if (href === '/maintenances/list') return (counts.maintenancePlansUpcoming || 0) + (counts.maintenanceSessionsCompleted || 0)
       if (href === '/maintenances/items') return counts.maintenanceTemplates
       if (href === '/warnings') return counts.warnings
       return undefined
