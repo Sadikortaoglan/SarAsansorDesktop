@@ -38,6 +38,7 @@ export const API_ENDPOINTS = {
     BY_ID: (id: number) => `/maintenance-plans/${id}`,
     COMPLETE: (id: number) => `/maintenance-plans/${id}/complete`,
     RESCHEDULE: (id: number) => `/maintenance-plans/${id}/reschedule`,
+    // Note: /upcoming endpoint doesn't exist, use BASE with status=PLANNED query param
   },
 
   // Inspections

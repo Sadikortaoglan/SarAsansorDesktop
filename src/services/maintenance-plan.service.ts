@@ -215,4 +215,33 @@ export const maintenancePlanService = {
     const unwrapped = unwrapResponse(data)
     return mapPlanFromBackend(unwrapped)
   },
+
+  getUpcoming: async (): Promise<MaintenancePlan[]> => {
+    // Use query parameter instead of /upcoming endpoint
+    // Backend doesn't have /upcoming endpoint, so use status=PLANNED filter
+    console.log('🔍 UPCOMING REQUEST - Endpoint:', API_ENDPOINTS.MAINTENANCE_PLANS.BASE, 'with status=PLANNED')
+    const { data } = await apiClient.get<ApiResponse<any[]>>(API_ENDPOINTS.MAINTENANCE_PLANS.BASE, {
+      params: {
+        status: 'PLANNED',
+      },
+    })
+    console.log('📥 UPCOMING RAW RESPONSE:', JSON.stringify(data, null, 2))
+    const unwrapped = unwrapArrayResponse(data)
+    console.log('📥 UPCOMING UNWRAPPED:', unwrapped)
+    const mapped = unwrapped.map(mapPlanFromBackend)
+    console.log('📥 UPCOMING MAPPED:', mapped)
+    
+    // Filter out CANCELLED plans and only return future/upcoming plans
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const upcoming = mapped.filter((plan) => {
+      if (plan.status === 'CANCELLED') return false
+      const planDate = new Date(plan.scheduledDate)
+      planDate.setHours(0, 0, 0, 0)
+      // Include today and future dates
+      return planDate >= today
+    })
+    console.log('📥 UPCOMING FILTERED (future dates only):', upcoming)
+    return upcoming
+  },
 }

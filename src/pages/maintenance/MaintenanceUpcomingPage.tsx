@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Calendar, AlertTriangle, FileText } from 'lucide-react'
-import { maintenanceService } from '@/services/maintenance.service'
+import { maintenancePlanService, type MaintenancePlan } from '@/services/maintenance-plan.service'
 import { DateRangeFilterBar } from '@/components/maintenance/DateRangeFilterBar'
 import { TableResponsive } from '@/components/ui/table-responsive'
 import { Badge } from '@/components/ui/badge'
@@ -11,30 +11,72 @@ import { ActionButtons } from '@/components/ui/action-buttons'
 import { useToast } from '@/components/ui/use-toast'
 import { getUserFriendlyErrorMessage } from '@/lib/api-error-handler'
 import { formatElevatorDisplayName } from '@/lib/elevator-format'
+import { elevatorService } from '@/services/elevator.service'
 
 export function MaintenanceUpcomingPage() {
   const { toast } = useToast()
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [hasFilterApplied, setHasFilterApplied] = useState(false)
 
-  const { data: maintenances = [], isLoading, error } = useQuery({
-    queryKey: ['maintenances', 'upcoming', dateFrom, dateTo],
+  // Fetch elevators for display
+  const { data: elevators = [] } = useQuery({
+    queryKey: ['elevators', 'for-upcoming'],
+    queryFn: () => elevatorService.getAll(),
+  })
+
+  // Fetch upcoming maintenance plans - NO date filters on first load
+  const { data: plans = [], isLoading, error } = useQuery({
+    queryKey: ['maintenance-plans', 'upcoming', dateFrom, dateTo],
     queryFn: async () => {
-      const params: { paid?: boolean; dateFrom?: string; dateTo?: string } = {
-        paid: false,
+      console.log('🔍 UPCOMING PAGE - Fetching plans with filters:', { dateFrom, dateTo, hasFilterApplied })
+      
+      // If no filter applied, use dedicated upcoming endpoint
+      if (!hasFilterApplied || (!dateFrom && !dateTo)) {
+        console.log('📡 UPCOMING PAGE - Using /maintenance-plans/upcoming endpoint (no filters)')
+        return maintenancePlanService.getUpcoming()
       }
-      // DateRangeFilterBar already sends LocalDate format (YYYY-MM-DD)
-      // But ensure it's clean - service layer will also validate
+      
+      // If filter applied, use getAll with date filters
+      console.log('📡 UPCOMING PAGE - Using /maintenance-plans with date filters')
+      // Note: getAll doesn't support dateFrom/dateTo, so we'll filter client-side
+      // For now, just use getUpcoming and filter client-side
+      const allUpcoming = await maintenancePlanService.getUpcoming()
+      console.log('📥 UPCOMING PAGE - All upcoming plans:', allUpcoming)
+      
+      // Filter by date range if provided
+      let filtered = allUpcoming
       if (dateFrom) {
-        params.dateFrom = dateFrom.includes('T') ? dateFrom.split('T')[0] : dateFrom
+        const fromDate = new Date(dateFrom.includes('T') ? dateFrom.split('T')[0] : dateFrom)
+        filtered = filtered.filter((plan) => {
+          const planDate = new Date(plan.scheduledDate)
+          return planDate >= fromDate
+        })
       }
       if (dateTo) {
-        params.dateTo = dateTo.includes('T') ? dateTo.split('T')[0] : dateTo
+        const toDate = new Date(dateTo.includes('T') ? dateTo.split('T')[0] : dateTo)
+        filtered = filtered.filter((plan) => {
+          const planDate = new Date(plan.scheduledDate)
+          return planDate <= toDate
+        })
       }
-      return maintenanceService.getAll(params)
+      console.log('📥 UPCOMING PAGE - Filtered result:', filtered)
+      return filtered
     },
     enabled: true,
   })
+
+  // Log state after query
+  useEffect(() => {
+    console.log('📊 UPCOMING PAGE - State after query:', {
+      plansCount: plans.length,
+      plans,
+      dateFrom,
+      dateTo,
+      hasFilterApplied,
+      isLoading,
+    })
+  }, [plans, dateFrom, dateTo, hasFilterApplied, isLoading])
 
   // Handle errors
   useEffect(() => {
@@ -48,14 +90,16 @@ export function MaintenanceUpcomingPage() {
   }, [error, toast])
 
   const handleFilter = (from: string, to: string) => {
+    console.log('🔍 UPCOMING PAGE - Filter applied:', { from, to })
     setDateFrom(from)
     setDateTo(to)
+    setHasFilterApplied(true)
   }
 
-  const getStatusBadge = (tarih: string) => {
+  const getStatusBadge = (scheduledDate: string) => {
     const today = new Date()
-    const maintenanceDate = new Date(tarih)
-    const diffDays = Math.ceil((maintenanceDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    const planDate = new Date(scheduledDate)
+    const diffDays = Math.ceil((planDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
     if (diffDays < 0) {
       return (
@@ -82,12 +126,12 @@ export function MaintenanceUpcomingPage() {
 
   const columns = [
     {
-      key: 'tarih',
+      key: 'scheduledDate',
       header: 'Tarih',
       mobileLabel: 'Tarih',
       mobilePriority: 1,
-      render: (row: any) => (
-        <span className="font-medium">{formatDateShort(row.tarih)}</span>
+      render: (row: MaintenancePlan) => (
+        <span className="font-medium">{formatDateShort(row.scheduledDate)}</span>
       ),
     },
     {
@@ -95,20 +139,23 @@ export function MaintenanceUpcomingPage() {
       header: 'Asansör',
       mobileLabel: 'Asansör',
       mobilePriority: 2,
-      render: (row: any) => {
-        const displayInfo = formatElevatorDisplayName(row.elevator || {
-          kimlikNo: row.elevator?.kimlikNo,
-          bina: row.elevatorBuildingName || row.elevator?.bina,
-          adres: row.elevator?.adres,
-        })
+      render: (row: MaintenancePlan) => {
+        const elevator = elevators.find((e) => e.id === row.elevatorId)
+        const displayInfo = formatElevatorDisplayName(
+          elevator || {
+            kimlikNo: row.elevatorCode || row.elevatorName,
+            bina: row.buildingName,
+            adres: undefined,
+          }
+        )
         return (
           <div>
             <div className="font-semibold text-[#111827]">
               🛗 {displayInfo.fullName}
             </div>
             <div className="text-sm text-[#6B7280] mt-1">
-              {row.elevatorBuildingName || row.elevator?.bina || '-'}
-              {row.elevator?.adres && ` • ${row.elevator.adres}`}
+              {row.buildingName || elevator?.bina || '-'}
+              {elevator?.adres && ` • ${elevator.adres}`}
             </div>
             <div className="mt-1">
               <Badge variant="outline" className="text-xs text-[#9CA3AF] border-[#E5E7EB]">
@@ -120,29 +167,34 @@ export function MaintenanceUpcomingPage() {
       },
     },
     {
-      key: 'aciklama',
-      header: 'Açıklama',
-      mobileLabel: 'Açıklama',
+      key: 'note',
+      header: 'Not',
+      mobileLabel: 'Not',
       mobilePriority: 3,
-      render: (row: any) => (
-        <span className="text-sm">{row.aciklama || '-'}</span>
-      ),
-    },
-    {
-      key: 'ucret',
-      header: 'Ücret',
-      mobileLabel: 'Ücret',
-      mobilePriority: 4,
-      render: (row: any) => (
-        <span className="font-semibold">{row.ucret?.toLocaleString('tr-TR')} ₺</span>
+      render: (row: MaintenancePlan) => (
+        <span className="text-sm">{row.note || '-'}</span>
       ),
     },
     {
       key: 'status',
       header: 'Durum',
       mobileLabel: 'Durum',
+      mobilePriority: 4,
+      render: (row: MaintenancePlan) => (
+        <Badge
+          variant={row.status === 'PLANNED' ? 'planned' : row.status === 'COMPLETED' ? 'completed' : 'aborted'}
+          className="text-xs"
+        >
+          {row.status === 'PLANNED' ? 'Planlandı' : row.status === 'COMPLETED' ? 'Tamamlandı' : 'İptal Edildi'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'urgency',
+      header: 'Acil Durum',
+      mobileLabel: 'Acil Durum',
       mobilePriority: 5,
-      render: (row: any) => getStatusBadge(row.tarih),
+      render: (row: MaintenancePlan) => getStatusBadge(row.scheduledDate),
     },
     {
       key: 'actions',
@@ -150,12 +202,12 @@ export function MaintenanceUpcomingPage() {
       mobileLabel: '',
       mobilePriority: 1,
       hideOnMobile: false,
-      render: (row: any) => (
+      render: (row: MaintenancePlan) => (
         <ActionButtons
           onView={() => {
             toast({
               title: 'Detay',
-              description: `Bakım ID: ${row.id}`,
+              description: `Bakım Planı ID: ${row.id}`,
             })
           }}
         />
@@ -191,19 +243,21 @@ export function MaintenanceUpcomingPage() {
               <div className="flex items-center justify-center py-12">
                 <div className="text-[#6B7280]">Yükleniyor...</div>
               </div>
-            ) : maintenances.length === 0 ? (
+            ) : plans.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="p-4 bg-[#F3F4F6] rounded-full mb-4">
                   <FileText className="h-8 w-8 text-[#9CA3AF]" />
                 </div>
                 <p className="text-lg font-semibold text-[#111827] mb-1">Sonuç bulunamadı</p>
                 <p className="text-sm text-[#6B7280] max-w-md">
-                  Seçilen tarih aralığında planlanmış bakım kaydı bulunmamaktadır.
+                  {hasFilterApplied
+                    ? 'Seçilen tarih aralığında planlanmış bakım kaydı bulunmamaktadır.'
+                    : 'Yaklaşan bakım planı bulunmamaktadır.'}
                 </p>
               </div>
             ) : (
               <TableResponsive
-                data={maintenances}
+                data={plans}
                 columns={columns}
                 keyExtractor={(item) => String(item.id)}
               />
