@@ -16,6 +16,7 @@ import { formatElevatorDisplayName } from '@/lib/elevator-format'
 import { formatDateForAPI } from '@/lib/date-utils'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 type StatusFilter = 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'ALL'
 
@@ -34,6 +35,8 @@ export function MaintenancePage() {
   const [completeNote, setCompleteNote] = useState('')
   const [completePrice, setCompletePrice] = useState('')
   const [completePhotos, setCompletePhotos] = useState<File[]>([])
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
+  const [planToCancel, setPlanToCancel] = useState<MaintenancePlan | null>(null)
 
   // Fetch elevators for display
   const { data: elevators = [] } = useQuery({
@@ -52,9 +55,12 @@ export function MaintenancePage() {
     },
   })
 
-  // Filter plans by selected status
+  // Filter plans by selected status - Exclude CANCELLED and NOT_PLANNED
   const filteredPlans = allPlans.filter((plan) => {
-    if (selectedStatus === 'ALL') return plan.status !== 'CANCELLED'
+    // Always exclude cancelled and not planned plans
+    if (plan.status === 'CANCELLED' || plan.status === 'NOT_PLANNED') return false
+    
+    if (selectedStatus === 'ALL') return true
     return plan.status === selectedStatus
   })
 
@@ -92,12 +98,15 @@ export function MaintenancePage() {
       // Invalidate and refetch to get updated status
       await queryClient.invalidateQueries({ queryKey: ['maintenance-plans'] })
       await queryClient.refetchQueries({ queryKey: ['maintenance-plans', 'all'] })
+      
+      // Close QR modal and open Complete modal
       setQrDialogOpen(false)
-      setQrCode('')
-      setSelectedPlan(null)
+      setCompleteDialogOpen(true)
+      // Keep qrCode and selectedPlan for Complete modal
+      
       toast({
         title: 'Başarılı',
-        description: 'Bakım başlatıldı',
+        description: 'Bakım başlatıldı. Şimdi bakım bilgilerini doldurun.',
       })
     },
     onError: (error: any) => {
@@ -133,14 +142,21 @@ export function MaintenancePage() {
     },
   })
 
-  // Cancel mutation
+  // Cancel mutation - Use DELETE endpoint
   const cancelMutation = useMutation({
-    mutationFn: (id: number) => maintenancePlanService.update(id, { status: 'CANCELLED' }),
+    mutationFn: (id: number) => maintenancePlanService.delete(id),
     onSuccess: async () => {
+      // Immediately refetch from backend - no optimistic updates
       await queryClient.invalidateQueries({ queryKey: ['maintenance-plans'] })
+      await queryClient.refetchQueries({ queryKey: ['maintenance-plans', 'all'] })
+      await queryClient.invalidateQueries({ queryKey: ['dashboard', 'counts'] })
+      
+      setCancelConfirmOpen(false)
+      setPlanToCancel(null)
+      
       toast({
         title: 'Başarılı',
-        description: 'Bakım iptal edildi',
+        description: 'Bakım planı iptal edildi',
       })
     },
     onError: (error: any) => {
@@ -193,9 +209,13 @@ export function MaintenancePage() {
   }
 
   const handleCancel = (plan: MaintenancePlan) => {
-    if (confirm('Bu bakımı iptal etmek istediğinize emin misiniz?')) {
-      cancelMutation.mutate(plan.id)
-    }
+    setPlanToCancel(plan)
+    setCancelConfirmOpen(true)
+  }
+
+  const handleCancelConfirm = () => {
+    if (!planToCancel) return
+    cancelMutation.mutate(planToCancel.id)
   }
 
   const handleComplete = (plan: MaintenancePlan) => {
@@ -257,34 +277,37 @@ export function MaintenancePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB]">
-      {/* Premium Page Header */}
-      <div className="bg-white border-b border-[#E5E7EB] shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+    <div className="min-h-screen bg-[#F8FAFC]">
+      {/* Corporate Page Header */}
+      <div className="bg-gradient-to-b from-indigo-50/50 to-white border-b border-[#E5E7EB]">
+        <div className="max-w-7xl mx-auto px-8 py-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-[#111827]">Bakım Yönetimi</h1>
-              <p className="text-sm text-[#6B7280] mt-1">
-                Tüm bakım planlarını görüntüleyin ve yönetin
+              <h1 className="text-3xl font-bold text-[#111827] mb-2">Bakım Yönetimi</h1>
+              <p className="text-sm text-[#6B7280] leading-relaxed">
+                Tüm bakım planlarını görüntüleyin, yönetin ve takip edin.
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-8 py-8">
         {/* Status Tabs */}
         <Tabs value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as StatusFilter)}>
-          <TabsList className="grid w-full max-w-md grid-cols-4 bg-[#F3F4F6] p-1 rounded-lg">
+          <TabsList className="flex w-full max-w-2xl bg-[#F3F4F6] p-2 gap-3 rounded-xl shadow-sm">
             <TabsTrigger
               value="ALL"
               className={cn(
                 'data-[state=active]:bg-white data-[state=active]:shadow-sm',
-                'flex items-center gap-2'
+                'flex items-center justify-center gap-2 h-11 px-4 transition-all duration-200 flex-1'
               )}
             >
-              Tümü
-              <Badge variant="outline" className="ml-1">
+              <span className="text-sm font-medium">Tümü</span>
+              <Badge 
+                variant="outline" 
+                className="ml-1 min-w-[28px] h-5 flex items-center justify-center px-2 rounded-full text-[11px] font-semibold transition-all duration-200"
+              >
                 {getStatusCount('ALL')}
               </Badge>
             </TabsTrigger>
@@ -292,11 +315,14 @@ export function MaintenancePage() {
               value="PLANNED"
               className={cn(
                 'data-[state=active]:bg-white data-[state=active]:shadow-sm',
-                'flex items-center gap-2'
+                'flex items-center justify-center gap-2 h-11 px-4 transition-all duration-200 flex-1'
               )}
             >
-              Planlandı
-              <Badge variant="outline" className="ml-1">
+              <span className="text-sm font-medium">Planlandı</span>
+              <Badge 
+                variant="outline" 
+                className="ml-1 min-w-[28px] h-5 flex items-center justify-center px-2 rounded-full text-[11px] font-semibold transition-all duration-200"
+              >
                 {getStatusCount('PLANNED')}
               </Badge>
             </TabsTrigger>
@@ -304,11 +330,14 @@ export function MaintenancePage() {
               value="IN_PROGRESS"
               className={cn(
                 'data-[state=active]:bg-white data-[state=active]:shadow-sm',
-                'flex items-center gap-2'
+                'flex items-center justify-center gap-2 h-11 px-4 transition-all duration-200 flex-1'
               )}
             >
-              Devam Ediyor
-              <Badge variant="outline" className="ml-1">
+              <span className="text-sm font-medium">Devam Ediyor</span>
+              <Badge 
+                variant="outline" 
+                className="ml-1 min-w-[28px] h-5 flex items-center justify-center px-2 rounded-full text-[11px] font-semibold transition-all duration-200"
+              >
                 {getStatusCount('IN_PROGRESS')}
               </Badge>
             </TabsTrigger>
@@ -316,35 +345,38 @@ export function MaintenancePage() {
               value="COMPLETED"
               className={cn(
                 'data-[state=active]:bg-white data-[state=active]:shadow-sm',
-                'flex items-center gap-2'
+                'flex items-center justify-center gap-2 h-11 px-4 transition-all duration-200 flex-1'
               )}
             >
-              Tamamlandı
-              <Badge variant="outline" className="ml-1">
+              <span className="text-sm font-medium">Tamamlandı</span>
+              <Badge 
+                variant="outline" 
+                className="ml-1 min-w-[28px] h-5 flex items-center justify-center px-2 rounded-full text-[11px] font-semibold transition-all duration-200"
+              >
                 {getStatusCount('COMPLETED')}
               </Badge>
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value={selectedStatus} className="mt-6">
+          <TabsContent value={selectedStatus} className="mt-8">
             {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-[#6B7280]">Yükleniyor...</div>
+              <div className="flex items-center justify-center py-16">
+                <div className="text-[#6B7280] text-sm font-medium">Yükleniyor...</div>
               </div>
             ) : filteredPlans.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="p-4 bg-[#F3F4F6] rounded-full mb-4">
-                  <FileText className="h-8 w-8 text-[#9CA3AF]" />
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="p-5 bg-[#F3F4F6] rounded-full mb-5 shadow-sm">
+                  <FileText className="h-10 w-10 text-[#9CA3AF]" />
                 </div>
-                <p className="text-lg font-semibold text-[#111827] mb-1">Sonuç bulunamadı</p>
-                <p className="text-sm text-[#6B7280] max-w-md">
+                <p className="text-lg font-semibold text-[#111827] mb-2">Sonuç bulunamadı</p>
+                <p className="text-sm text-[#6B7280] max-w-md leading-relaxed">
                   {selectedStatus === 'ALL'
                     ? 'Bakım planı bulunmamaktadır.'
                     : `${selectedStatus === 'PLANNED' ? 'Planlanmış' : selectedStatus === 'IN_PROGRESS' ? 'Devam eden' : 'Tamamlanmış'} bakım planı bulunmamaktadır.`}
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredPlans.map((plan) => {
                   const elevator = elevators.find((e) => e.id === plan.elevatorId)
                   const displayInfo = formatElevatorDisplayName(
@@ -358,20 +390,22 @@ export function MaintenancePage() {
                   return (
                     <Card
                       key={plan.id}
-                      className="bg-white border border-[#E5E7EB] shadow-sm rounded-xl hover:shadow-md transition-all duration-200"
+                      className="bg-white border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.08)] rounded-xl hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-200"
                     >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <CardTitle className="text-lg font-bold text-[#111827] mb-1">
+                      <CardHeader className="pb-4 bg-white border-b border-[#E5E7EB]">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-lg font-bold text-[#111827] mb-1.5">
                               🛗 {displayInfo.fullName}
                             </CardTitle>
-                            <p className="text-sm text-[#6B7280]">{plan.buildingName || elevator?.bina || '-'}</p>
+                            <p className="text-sm text-[#6B7280] truncate">{plan.buildingName || elevator?.bina || '-'}</p>
                           </div>
-                          {getStatusBadge(plan.status)}
+                          <div className="flex-shrink-0">
+                            {getStatusBadge(plan.status)}
+                          </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="space-y-3">
+                      <CardContent className="space-y-4 pt-6">
                         <div className="space-y-2 text-sm">
                           <div className="flex items-center gap-2 text-[#6B7280]">
                             <Calendar className="h-4 w-4" />
@@ -469,17 +503,23 @@ export function MaintenancePage() {
       </div>
 
       {/* QR Scanner Modal (for Start) */}
-      <Dialog open={qrDialogOpen && !completeDialogOpen} onOpenChange={setQrDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-xl border border-[#E5E7EB] shadow-xl">
+      <Dialog open={qrDialogOpen && !completeDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setQrDialogOpen(false)
+          setQrCode('')
+          setSelectedPlan(null)
+        }
+      }}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-[#111827]">QR Kod ile Bakım Başlat</DialogTitle>
-            <DialogDescription className="text-sm text-[#6B7280]">
+            <DialogTitle>QR Kod ile Bakım Başlat</DialogTitle>
+            <DialogDescription>
               Bakımı başlatmak için QR kodunu girin veya tarayın
             </DialogDescription>
           </DialogHeader>
           {selectedPlan && (
-            <div className="space-y-4">
-              <div className="p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+            <div className="space-y-6">
+              <div className="p-4 bg-[#F9FAFB] rounded-[8px] border border-[#E5E7EB]">
                 {(() => {
                   const elevator = elevators.find((e) => e.id === selectedPlan.elevatorId)
                   const displayInfo = formatElevatorDisplayName(
@@ -491,13 +531,13 @@ export function MaintenancePage() {
                   )
                   return (
                     <>
-                      <div className="text-sm font-medium text-[#6B7280] mb-1">Asansör</div>
-                      <div className="text-lg font-bold text-[#111827] mb-2">
+                      <div className="text-[13px] font-semibold text-[#6B7280] mb-1">Asansör</div>
+                      <div className="text-base font-bold text-[#111827] mb-2">
                         🛗 {displayInfo.fullName}
                       </div>
-                      <div className="text-sm text-[#6B7280]">
+                      <div className="text-[13px] text-[#6B7280]">
                         <div>
-                          <span className="font-medium">Planlanan Tarih:</span>{' '}
+                          <span className="font-semibold">Planlanan Tarih:</span>{' '}
                           {new Date(selectedPlan.scheduledDate).toLocaleDateString('tr-TR', {
                             day: 'numeric',
                             month: 'long',
@@ -510,14 +550,13 @@ export function MaintenancePage() {
                 })()}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="qrCode" className="text-sm font-medium text-[#111827]">QR Kod</Label>
+                <Label htmlFor="qrCode">QR Kod</Label>
                 <Input
                   id="qrCode"
                   placeholder="QR kodunu girin veya tarayın"
                   value={qrCode}
                   onChange={(e) => setQrCode(e.target.value)}
                   autoFocus
-                  className="h-11 border-[#E5E7EB] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       handleQRSubmit()
@@ -527,7 +566,7 @@ export function MaintenancePage() {
               </div>
             </div>
           )}
-          <DialogFooter className="gap-2">
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
@@ -535,14 +574,12 @@ export function MaintenancePage() {
                 setQrCode('')
                 setSelectedPlan(null)
               }}
-              className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]"
             >
               İptal
             </Button>
             <Button
               onClick={handleQRSubmit}
               disabled={!qrCode.trim() || startMaintenanceMutation.isPending}
-              className="bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white hover:from-[#4338CA] hover:to-[#3730A3] shadow-md"
             >
               {startMaintenanceMutation.isPending ? 'Başlatılıyor...' : 'Başlat'}
             </Button>
@@ -551,17 +588,23 @@ export function MaintenancePage() {
       </Dialog>
 
       {/* Reschedule Modal */}
-      <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-xl border border-[#E5E7EB] shadow-xl">
+      <Dialog open={rescheduleDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setRescheduleDialogOpen(false)
+          setRescheduleDate('')
+          setSelectedPlan(null)
+        }
+      }}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-[#111827]">Bakım Tarihini Değiştir</DialogTitle>
-            <DialogDescription className="text-sm text-[#6B7280]">
+            <DialogTitle>Bakım Tarihini Değiştir</DialogTitle>
+            <DialogDescription>
               Yeni planlanan tarihi seçin
             </DialogDescription>
           </DialogHeader>
           {selectedPlan && (
-            <div className="space-y-4">
-              <div className="p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+            <div className="space-y-6">
+              <div className="p-4 bg-[#F9FAFB] rounded-[8px] border border-[#E5E7EB]">
                 {(() => {
                   const elevator = elevators.find((e) => e.id === selectedPlan.elevatorId)
                   const displayInfo = formatElevatorDisplayName(
@@ -572,15 +615,15 @@ export function MaintenancePage() {
                     }
                   )
                   return (
-                    <div className="text-sm text-[#6B7280]">
-                      <div className="font-medium mb-1">Asansör:</div>
+                    <div className="text-[13px] text-[#6B7280]">
+                      <div className="font-semibold mb-1">Asansör:</div>
                       <div className="font-bold text-[#111827]">🛗 {displayInfo.fullName}</div>
                     </div>
                   )
                 })()}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="rescheduleDate" className="text-sm font-medium text-[#111827]">
+                <Label htmlFor="rescheduleDate">
                   Yeni Planlanan Tarih
                 </Label>
                 <Input
@@ -588,13 +631,12 @@ export function MaintenancePage() {
                   type="date"
                   value={rescheduleDate}
                   onChange={(e) => setRescheduleDate(e.target.value)}
-                  className="h-11 border-[#E5E7EB] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20"
                   min={new Date().toISOString().split('T')[0]}
                 />
               </div>
             </div>
           )}
-          <DialogFooter className="gap-2">
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
@@ -602,14 +644,12 @@ export function MaintenancePage() {
                 setRescheduleDate('')
                 setSelectedPlan(null)
               }}
-              className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]"
             >
               İptal
             </Button>
             <Button
               onClick={handleRescheduleSubmit}
               disabled={!rescheduleDate || rescheduleMutation.isPending}
-              className="bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white hover:from-[#4338CA] hover:to-[#3730A3] shadow-md"
             >
               {rescheduleMutation.isPending ? 'Güncelleniyor...' : 'Tarihi Güncelle'}
             </Button>
@@ -618,17 +658,26 @@ export function MaintenancePage() {
       </Dialog>
 
       {/* Complete Maintenance Modal */}
-      <Dialog open={completeDialogOpen} onOpenChange={setCompleteDialogOpen}>
-        <DialogContent className="sm:max-w-lg rounded-xl border border-[#E5E7EB] shadow-xl">
+      <Dialog open={completeDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setCompleteDialogOpen(false)
+          setCompleteNote('')
+          setCompletePrice('')
+          setCompletePhotos([])
+          setQrCode('')
+          setSelectedPlan(null)
+        }
+      }}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-[#111827]">Bakımı Tamamla</DialogTitle>
-            <DialogDescription className="text-sm text-[#6B7280]">
+            <DialogTitle>Bakımı Tamamla</DialogTitle>
+            <DialogDescription>
               Bakım bilgilerini doldurun ve QR kodunu girin
             </DialogDescription>
           </DialogHeader>
           {selectedPlan && (
-            <div className="space-y-4">
-              <div className="p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+            <div className="space-y-6">
+              <div className="p-4 bg-[#F9FAFB] rounded-[8px] border border-[#E5E7EB]">
                 {(() => {
                   const elevator = elevators.find((e) => e.id === selectedPlan.elevatorId)
                   const displayInfo = formatElevatorDisplayName(
@@ -640,8 +689,8 @@ export function MaintenancePage() {
                   )
                   return (
                     <>
-                      <div className="text-sm font-medium text-[#6B7280] mb-1">Asansör</div>
-                      <div className="text-lg font-bold text-[#111827] mb-2">
+                      <div className="text-[13px] font-semibold text-[#6B7280] mb-1">Asansör</div>
+                      <div className="text-base font-bold text-[#111827] mb-2">
                         🛗 {displayInfo.fullName}
                       </div>
                     </>
@@ -650,7 +699,7 @@ export function MaintenancePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="completeNote" className="text-sm font-medium text-[#111827]">
+                <Label htmlFor="completeNote">
                   Not
                 </Label>
                 <Textarea
@@ -658,12 +707,12 @@ export function MaintenancePage() {
                   value={completeNote}
                   onChange={(e) => setCompleteNote(e.target.value)}
                   placeholder="Bakım hakkında notlar..."
-                  className="min-h-[100px] border-[#E5E7EB] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20"
+                  className="min-h-[100px] rounded-[8px] border-[#D1D5DB] focus:border-[#4F46E5] focus:ring-[3px] focus:ring-[#4F46E5]/15"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="completePrice" className="text-sm font-medium text-[#111827]">
+                <Label htmlFor="completePrice">
                   Ücret (₺)
                 </Label>
                 <Input
@@ -672,12 +721,11 @@ export function MaintenancePage() {
                   value={completePrice}
                   onChange={(e) => setCompletePrice(e.target.value)}
                   placeholder="0.00"
-                  className="h-11 border-[#E5E7EB] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="completePhotos" className="text-sm font-medium text-[#111827]">
+                <Label htmlFor="completePhotos">
                   Fotoğraflar * (Minimum 4 adet)
                 </Label>
                 <Input
@@ -689,17 +737,24 @@ export function MaintenancePage() {
                     const files = Array.from(e.target.files || [])
                     setCompletePhotos(files)
                   }}
-                  className="h-11 border-[#E5E7EB] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20"
                 />
-                {completePhotos.length > 0 && (
-                  <p className="text-xs text-[#6B7280]">
-                    Seçilen fotoğraf sayısı: {completePhotos.length} / 4 (minimum)
+                <div className="flex items-center justify-between mt-2">
+                  <p className={cn(
+                    "text-[13px]",
+                    completePhotos.length < 4 ? "text-[#DC2626]" : "text-[#16A34A]"
+                  )}>
+                    Seçilen: {completePhotos.length} / 4 (minimum)
                   </p>
-                )}
+                  {completePhotos.length < 4 && (
+                    <span className="text-[12px] text-[#DC2626] font-medium">
+                      En az 4 fotoğraf gerekli
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="completeQRCode" className="text-sm font-medium text-[#111827]">
+                <Label htmlFor="completeQRCode">
                   QR Kod *
                 </Label>
                 <Input
@@ -707,12 +762,11 @@ export function MaintenancePage() {
                   placeholder="QR kodunu girin veya tarayın"
                   value={qrCode}
                   onChange={(e) => setQrCode(e.target.value)}
-                  className="h-11 border-[#E5E7EB] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20"
                 />
               </div>
             </div>
           )}
-          <DialogFooter className="gap-2">
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
@@ -723,7 +777,6 @@ export function MaintenancePage() {
                 setQrCode('')
                 setSelectedPlan(null)
               }}
-              className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]"
             >
               İptal
             </Button>
@@ -734,13 +787,25 @@ export function MaintenancePage() {
                 completePhotos.length < 4 ||
                 completeMutation.isPending
               }
-              className="bg-gradient-to-r from-[#16A34A] to-[#15803D] text-white hover:from-[#15803D] hover:to-[#166534] shadow-md"
+              className="bg-gradient-to-r from-[#16A34A] to-[#15803D] text-white hover:from-[#15803D] hover:to-[#166534]"
             >
               {completeMutation.isPending ? 'Tamamlanıyor...' : 'Tamamla'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Confirmation Dialog */}
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        onOpenChange={setCancelConfirmOpen}
+        title="Bakım Planını İptal Et"
+        message="Bu bakım planını iptal etmek istediğinize emin misiniz? İptal edilen planlar listeden kaldırılacaktır."
+        confirmText="İptal Et"
+        cancelText="Vazgeç"
+        onConfirm={handleCancelConfirm}
+        variant="destructive"
+      />
     </div>
   )
 }

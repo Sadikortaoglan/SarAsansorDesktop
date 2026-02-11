@@ -10,7 +10,7 @@ export interface MaintenancePlan {
   elevatorCode?: string
   buildingName?: string
   scheduledDate: string // YYYY-MM-DD
-  status: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+  status: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'NOT_PLANNED'
   completedDate?: string
   qrCode?: string
   note?: string // Backend'den gelen not
@@ -240,7 +240,8 @@ export const maintenancePlanService = {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const upcoming = mapped.filter((plan) => {
-      if (plan.status === 'CANCELLED') return false
+      // Exclude cancelled and not planned plans
+      if (plan.status === 'CANCELLED' || plan.status === 'NOT_PLANNED') return false
       const planDate = new Date(plan.scheduledDate)
       planDate.setHours(0, 0, 0, 0)
       // Include today and future dates

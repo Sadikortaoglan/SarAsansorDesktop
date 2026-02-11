@@ -202,14 +202,14 @@ export function MaintenancePlanningPage() {
     },
   })
 
-  // Delete/Cancel plan mutation
+  // Delete/Cancel plan mutation - Use DELETE endpoint
   const cancelPlanMutation = useMutation({
-    mutationFn: (id: number) => maintenancePlanService.update(id, { status: 'CANCELLED' }),
+    mutationFn: (id: number) => maintenancePlanService.delete(id),
     onSuccess: async () => {
       const year = currentMonth.getFullYear()
       const month = currentMonth.getMonth()
       
-      // Invalidate and refetch - rely ONLY on backend response
+      // Immediately refetch from backend - no optimistic updates
       // DO NOT manually filter or merge old state
       await queryClient.invalidateQueries({ queryKey: ['maintenance-plans'] })
       await queryClient.refetchQueries({ 
@@ -377,17 +377,18 @@ export function MaintenancePlanningPage() {
     const year = currentMonth.getFullYear()
     const month = currentMonth.getMonth()
     return existingPlans.some((plan) => {
-      if (plan.elevatorId !== elevatorId || plan.status === 'CANCELLED') return false
+      if (plan.elevatorId !== elevatorId || plan.status === 'CANCELLED' || plan.status === 'NOT_PLANNED') return false
       const planDate = new Date(plan.scheduledDate)
       return planDate.getFullYear() === year && planDate.getMonth() === month
     })
   }
 
-  // Get plans for a specific date (excluding CANCELLED - they should not appear in calendar)
+  // Get plans for a specific date (excluding CANCELLED and NOT_PLANNED - they should not appear in calendar)
   const getPlansForDate = (date: Date): MaintenancePlan[] => {
     const dateStr = date.toISOString().split('T')[0]
     return existingPlans.filter((plan) => {
-      if (plan.status === 'CANCELLED') return false // CANCELLED planlar takvimde gösterilmez
+      // Exclude cancelled and not planned plans from calendar
+      if (plan.status === 'CANCELLED' || plan.status === 'NOT_PLANNED') return false
       const planDate = new Date(plan.scheduledDate)
       const planDateStr = planDate.toISOString().split('T')[0]
       return planDateStr === dateStr
@@ -414,7 +415,7 @@ export function MaintenancePlanningPage() {
     // Check if any selected elevator already has a plan in this month
     for (const elevatorId of selectedElevators) {
       const hasPlan = existingPlans.some((plan) => {
-        if (plan.elevatorId !== elevatorId || plan.status === 'CANCELLED') return false
+        if (plan.elevatorId !== elevatorId || plan.status === 'CANCELLED' || plan.status === 'NOT_PLANNED') return false
         const planDate = new Date(plan.scheduledDate)
         return (
           planDate.getFullYear() === year &&
@@ -489,7 +490,7 @@ export function MaintenancePlanningPage() {
     const conflicts: number[] = []
     selectedElevators.forEach((elevatorId) => {
       const hasConflict = existingPlans.some((plan) => {
-        if (plan.elevatorId !== elevatorId || plan.status === 'CANCELLED') return false
+        if (plan.elevatorId !== elevatorId || plan.status === 'CANCELLED' || plan.status === 'NOT_PLANNED') return false
         const planDate = new Date(plan.scheduledDate)
         const planDateStr = planDate.toISOString().split('T')[0]
         return planDateStr === dateStr
@@ -1157,7 +1158,7 @@ export function MaintenancePlanningPage() {
                 <CardContent className="p-6">
                   <div className="space-y-3">
                     {existingPlans
-                      .filter((p) => p.status !== 'CANCELLED')
+                      .filter((p) => p.status !== 'CANCELLED' && p.status !== 'NOT_PLANNED')
                       .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())
                       .map((plan, index) => (
                         <div
@@ -1255,9 +1256,9 @@ export function MaintenancePlanningPage() {
         setEditDialogOpen(open)
         if (!open) resetEditForm()
       }}>
-        <DialogContent className="sm:max-w-lg rounded-xl border border-[#E5E7EB] shadow-xl">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-[#111827]">
+            <DialogTitle>
               {selectedPlanForEdit && (() => {
                 const elevator = elevators.find((e) => e.id === selectedPlanForEdit.elevatorId)
                 const displayInfo = formatElevatorDisplayName(
@@ -1269,15 +1270,15 @@ export function MaintenancePlanningPage() {
                 return `🛗 ${displayInfo.fullName}`
               })()}
             </DialogTitle>
-            <DialogDescription className="text-sm text-[#6B7280]">
+            <DialogDescription>
               Bakım planını düzenleyin
             </DialogDescription>
           </DialogHeader>
           {selectedPlanForEdit && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {/* Planlanan Tarih */}
               <div className="space-y-2">
-                <Label htmlFor="editPlannedDate" className="text-sm font-medium text-[#111827]">
+                <Label htmlFor="editPlannedDate">
                   Planlanan Tarih
                 </Label>
                 <Input
@@ -1285,14 +1286,13 @@ export function MaintenancePlanningPage() {
                   type="date"
                   value={editPlannedDate}
                   onChange={(e) => setEditPlannedDate(e.target.value)}
-                  className="h-11 border-[#E5E7EB] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20"
                   disabled={selectedPlanForEdit.status === 'COMPLETED' || selectedPlanForEdit.status === 'CANCELLED'}
                 />
               </div>
 
               {/* Bakım Şablonu */}
               <div className="space-y-2">
-                <Label htmlFor="editTemplate" className="text-sm font-medium text-[#111827]">
+                <Label htmlFor="editTemplate">
                   Bakım Şablonu
                 </Label>
                 <Select
@@ -1300,7 +1300,7 @@ export function MaintenancePlanningPage() {
                   onValueChange={(value) => setEditTemplateId(Number(value))}
                   disabled={selectedPlanForEdit.status === 'COMPLETED' || selectedPlanForEdit.status === 'CANCELLED'}
                 >
-                  <SelectTrigger className="h-11 bg-[#F9FAFB] border-[#E5E7EB]">
+                  <SelectTrigger className="h-[44px] bg-white border-[#D1D5DB] rounded-[8px]">
                     <SelectValue placeholder="Bakım şablonu seçin" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1315,7 +1315,7 @@ export function MaintenancePlanningPage() {
 
               {/* Teknisyen */}
               <div className="space-y-2">
-                <Label htmlFor="editTechnician" className="text-sm font-medium text-[#111827]">
+                <Label htmlFor="editTechnician">
                   Teknisyen
                 </Label>
                 <Select
@@ -1323,7 +1323,7 @@ export function MaintenancePlanningPage() {
                   onValueChange={(value) => setEditTechnicianId(Number(value))}
                   disabled={selectedPlanForEdit.status === 'COMPLETED' || selectedPlanForEdit.status === 'CANCELLED'}
                 >
-                  <SelectTrigger className="h-11 bg-[#F9FAFB] border-[#E5E7EB]">
+                  <SelectTrigger className="h-[44px] bg-white border-[#D1D5DB] rounded-[8px]">
                     <SelectValue placeholder="Teknisyen seçin" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1338,7 +1338,7 @@ export function MaintenancePlanningPage() {
 
               {/* Not */}
               <div className="space-y-2">
-                <Label htmlFor="editNote" className="text-sm font-medium text-[#111827]">
+                <Label htmlFor="editNote">
                   Not
                 </Label>
                 <Textarea
@@ -1346,15 +1346,15 @@ export function MaintenancePlanningPage() {
                   value={editNote}
                   onChange={(e) => setEditNote(e.target.value)}
                   placeholder="Bakım planı hakkında notlar..."
-                  className="min-h-[100px] border-[#E5E7EB] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20"
+                  className="min-h-[100px] rounded-[8px] border-[#D1D5DB] focus:border-[#4F46E5] focus:ring-[3px] focus:ring-[#4F46E5]/15"
                   disabled={selectedPlanForEdit.status === 'COMPLETED' || selectedPlanForEdit.status === 'CANCELLED'}
                 />
               </div>
 
               {/* Status Info */}
-              <div className="p-3 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+              <div className="p-4 bg-[#F9FAFB] rounded-[8px] border border-[#E5E7EB]">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-[#6B7280]">Durum:</span>
+                  <span className="text-[13px] font-semibold text-[#6B7280]">Durum:</span>
                   <Badge
                     variant={
                       selectedPlanForEdit.status === 'COMPLETED'
@@ -1375,11 +1375,10 @@ export function MaintenancePlanningPage() {
               </div>
             </div>
           )}
-          <DialogFooter className="gap-2 flex-wrap">
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setEditDialogOpen(false)}
-              className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]"
             >
               Kapat
             </Button>
@@ -1396,7 +1395,6 @@ export function MaintenancePlanningPage() {
                 <Button
                   onClick={handleEditSubmit}
                   disabled={updatePlanMutation.isPending || !editPlannedDate}
-                  className="bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white hover:from-[#4338CA] hover:to-[#3730A3] shadow-md"
                 >
                   {updatePlanMutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
                 </Button>
@@ -1407,7 +1405,6 @@ export function MaintenancePlanningPage() {
                     setCancelConfirmOpen(true)
                     setEditDialogOpen(false)
                   }}
-                  className="bg-[#DC2626] hover:bg-[#B91C1C] text-white"
                 >
                   Bakımı İptal Et
                 </Button>
@@ -1419,9 +1416,9 @@ export function MaintenancePlanningPage() {
 
       {/* Plan List Dialog (Multiple plans on same date) */}
       <Dialog open={planListDialogOpen} onOpenChange={setPlanListDialogOpen}>
-        <DialogContent className="sm:max-w-2xl rounded-xl border border-[#E5E7EB] shadow-xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-[#111827]">
+            <DialogTitle>
               {selectedDateForPlans &&
                 new Date(selectedDateForPlans).toLocaleDateString('tr-TR', {
                   day: 'numeric',
@@ -1430,14 +1427,14 @@ export function MaintenancePlanningPage() {
                 })}{' '}
               - Bakım Planları
             </DialogTitle>
-            <DialogDescription className="text-sm text-[#6B7280]">
+            <DialogDescription>
               Bu tarihte planlanmış bakımlar
             </DialogDescription>
           </DialogHeader>
           {selectedDateForPlans && (
             <div className="space-y-3 max-h-[500px] overflow-y-auto">
               {getAllPlansForDate(selectedDateForPlans)
-                .filter((p) => p.status !== 'CANCELLED') // CANCELLED planları listede gösterme
+                .filter((p) => p.status !== 'CANCELLED' && p.status !== 'NOT_PLANNED') // CANCELLED and NOT_PLANNED plans should not appear in list
                 .map((plan) => {
                 const elevator = elevators.find((e) => e.id === plan.elevatorId)
                 const displayInfo = formatElevatorDisplayName(
@@ -1559,16 +1556,16 @@ export function MaintenancePlanningPage() {
 
       {/* QR Code Dialog - Premium Style */}
       <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-xl border border-[#E5E7EB] shadow-xl">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-[#111827]">QR Kod ile Bakım Tamamla</DialogTitle>
-            <DialogDescription className="text-sm text-[#6B7280]">
+            <DialogTitle>QR Kod ile Bakım Tamamla</DialogTitle>
+            <DialogDescription>
               Bakımı tamamlamak için QR kodunu girin veya tarayın
             </DialogDescription>
           </DialogHeader>
           {selectedPlanForQR && (
-            <div className="space-y-4">
-              <div className="p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+            <div className="space-y-6">
+              <div className="p-4 bg-[#F9FAFB] rounded-[8px] border border-[#E5E7EB]">
                 {(() => {
                   const elevator = elevators.find((e) => e.id === selectedPlanForQR.elevatorId)
                   const planInfo = formatMaintenancePlanElevator(
@@ -1578,16 +1575,16 @@ export function MaintenancePlanningPage() {
                   )
                   return (
                     <>
-                      <div className="text-sm font-medium text-[#6B7280] mb-1">Asansör</div>
-                      <div className="text-lg font-bold text-[#111827] mb-2">
+                      <div className="text-[13px] font-semibold text-[#6B7280] mb-1">Asansör</div>
+                      <div className="text-base font-bold text-[#111827] mb-2">
                         🛗 {planInfo.title}
                       </div>
-                      <div className="text-sm text-[#6B7280] space-y-1">
+                      <div className="text-[13px] text-[#6B7280] space-y-1">
                         <div>
-                          <span className="font-medium">Adres:</span> {elevator?.adres || selectedPlanForQR.buildingName || '-'}
+                          <span className="font-semibold">Adres:</span> {elevator?.adres || selectedPlanForQR.buildingName || '-'}
                         </div>
                         <div>
-                          <span className="font-medium">Planlanan Tarih:</span>{' '}
+                          <span className="font-semibold">Planlanan Tarih:</span>{' '}
                           {new Date(selectedPlanForQR.scheduledDate).toLocaleDateString('tr-TR', {
                             day: 'numeric',
                             month: 'long',
@@ -1596,7 +1593,7 @@ export function MaintenancePlanningPage() {
                         </div>
                         {maintenanceTemplates.find((t) => t.id === selectedTemplateId) && (
                           <div>
-                            <span className="font-medium">Bakım Türü:</span>{' '}
+                            <span className="font-semibold">Bakım Türü:</span>{' '}
                             {maintenanceTemplates.find((t) => t.id === selectedTemplateId)?.name}
                           </div>
                         )}
@@ -1611,38 +1608,35 @@ export function MaintenancePlanningPage() {
                 })()}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="qrCode" className="text-sm font-medium text-[#111827]">QR Kod</Label>
+                <Label htmlFor="qrCode">QR Kod</Label>
                 <Input
                   id="qrCode"
                   placeholder="QR kodunu girin veya tarayın"
                   value={qrCode}
                   onChange={(e) => setQrCode(e.target.value)}
                   autoFocus
-                  className="h-11 border-[#E5E7EB] focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       handleQRSubmit()
                     }
                   }}
                 />
-                <p className="text-xs text-[#6B7280]">
+                <p className="text-[13px] text-[#6B7280]">
                   Mobil cihazınızın kamerasını kullanarak QR kodu tarayabilirsiniz
                 </p>
               </div>
             </div>
           )}
-          <DialogFooter className="gap-2">
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setQrDialogOpen(false)}
-              className="border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]"
             >
               İptal
             </Button>
             <Button
               onClick={handleQRSubmit}
               disabled={!qrCode.trim() || completeWithQRMutation.isPending}
-              className="bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white hover:from-[#4338CA] hover:to-[#3730A3] shadow-md"
             >
               {completeWithQRMutation.isPending ? 'Tamamlanıyor...' : 'Tamamla'}
             </Button>
