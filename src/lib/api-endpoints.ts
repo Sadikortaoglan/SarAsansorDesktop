@@ -42,6 +42,31 @@ export const API_ENDPOINTS = {
     // Note: /upcoming endpoint doesn't exist, use BASE with status=PLANNED query param
   },
 
+  // Maintenance Templates
+  MAINTENANCE_TEMPLATES: {
+    BASE: '/maintenance-templates',
+    BY_ID: (id: number) => `/maintenance-templates/${id}`,
+    SECTIONS: (templateId: number) => `/maintenance-templates/${templateId}/sections`,
+  },
+
+  // Maintenance Sections
+  MAINTENANCE_SECTIONS: {
+    BY_ID: (id: number) => `/maintenance-sections/${id}`,
+    ITEMS: (sectionId: number) => `/maintenance-sections/${sectionId}/items`,
+    SUB_SECTIONS: (sectionId: number) => `/maintenance-sections/${sectionId}/sub-sections`,
+  },
+
+  // Maintenance Sub-Sections
+  MAINTENANCE_SUB_SECTIONS: {
+    BY_ID: (id: number) => `/maintenance-sub-sections/${id}`,
+    ITEMS: (subSectionId: number) => `/maintenance-sub-sections/${subSectionId}/items`,
+  },
+
+  // Maintenance Items
+  MAINTENANCE_ITEMS: {
+    BY_ID: (id: number) => `/maintenance-items/${id}`,
+  },
+
   // Inspections
   INSPECTIONS: {
     BASE: '/inspections',
