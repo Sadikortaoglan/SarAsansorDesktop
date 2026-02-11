@@ -1,5 +1,7 @@
 import apiClient from '@/lib/api'
 import { unwrapResponse, unwrapArrayResponse, type ApiResponse } from '@/lib/api-response'
+import { formatDateForAPI } from '@/lib/date-utils'
+import { API_ENDPOINTS } from '@/lib/api-endpoints'
 
 export type LabelType = 'GREEN' | 'BLUE' | 'YELLOW' | 'RED' | 'ORANGE'
 
@@ -137,14 +139,14 @@ function mapElevatorFromBackend(backend: any): Elevator {
 
 export const elevatorService = {
   getAll: async (): Promise<Elevator[]> => {
-    const { data } = await apiClient.get<ApiResponse<any[]>>('/elevators')
+    const { data } = await apiClient.get<ApiResponse<any[]>>(API_ENDPOINTS.ELEVATORS.BASE)
     const unwrapped = unwrapArrayResponse(data)
     // Array'i map et
     return Array.isArray(unwrapped) ? unwrapped.map(mapElevatorFromBackend) : []
   },
 
   getById: async (id: number): Promise<Elevator> => {
-    const { data } = await apiClient.get<ApiResponse<any>>(`/elevators/${id}`)
+    const { data } = await apiClient.get<ApiResponse<any>>(API_ENDPOINTS.ELEVATORS.BY_ID(id))
     const unwrapped = unwrapResponse(data)
     // Debug: Log backend response for manager fields
     console.log('Elevator getById backend response:', {
@@ -168,7 +170,7 @@ export const elevatorService = {
 
   getStatus: async (id: number): Promise<'EXPIRED' | 'WARNING' | 'OK'> => {
     // Backend: GET /elevators/{id}/status - durum bilgisini getirir
-    const { data } = await apiClient.get<ApiResponse<{ status: string }>>(`/elevators/${id}/status`)
+    const { data } = await apiClient.get<ApiResponse<{ status: string }>>(`${API_ENDPOINTS.ELEVATORS.BY_ID(id)}/status`)
     const unwrapped = unwrapResponse(data)
     const status = unwrapped.status || 'OK'
     if (status === 'EXPIRED') return 'EXPIRED'
@@ -178,23 +180,24 @@ export const elevatorService = {
 
   create: async (elevator: CreateElevatorRequest): Promise<Elevator> => {
     // Backend field isimleri: identityNumber, buildingName, address, elevatorNumber, labelType, labelDate, expiryDate, managerName, managerTcIdentityNo, managerPhone
+    // Ensure dates are in LocalDate format (YYYY-MM-DD)
     const backendRequest: any = {
       identityNumber: elevator.kimlikNo,
       buildingName: elevator.bina,
       address: elevator.adres,
       elevatorNumber: elevator.durak,
       labelType: elevator.labelType,
-      labelDate: elevator.labelDate,
-      expiryDate: elevator.endDate, // Backend expects expiryDate, not endDate
-      managerName: elevator.managerName, // Backend expects managerName
-      managerTcIdentityNo: elevator.managerTcIdentityNumber, // Backend expects managerTcIdentityNo
-      managerPhone: elevator.managerPhoneNumber, // Backend expects managerPhone
+      labelDate: formatDateForAPI(elevator.labelDate), // LocalDate format
+      expiryDate: formatDateForAPI(elevator.endDate), // LocalDate format
+      managerName: elevator.managerName,
+      managerTcIdentityNo: elevator.managerTcIdentityNumber,
+      managerPhone: elevator.managerPhoneNumber,
     }
     
     // Debug: Log payload before sending
     console.log('Elevator create payload:', JSON.stringify(backendRequest, null, 2))
     
-    const { data } = await apiClient.post<ApiResponse<any>>('/elevators', backendRequest)
+    const { data } = await apiClient.post<ApiResponse<any>>(API_ENDPOINTS.ELEVATORS.BASE, backendRequest)
     const unwrapped = unwrapResponse(data)
     return mapElevatorFromBackend(unwrapped)
   },
@@ -206,22 +209,28 @@ export const elevatorService = {
     if (elevator.adres !== undefined) backendRequest.address = elevator.adres
     if (elevator.durak !== undefined) backendRequest.elevatorNumber = elevator.durak
     if (elevator.labelType !== undefined) backendRequest.labelType = elevator.labelType
-    if (elevator.labelDate !== undefined) backendRequest.labelDate = elevator.labelDate
-    if (elevator.endDate !== undefined) backendRequest.expiryDate = elevator.endDate // Backend expects expiryDate
-    if (elevator.managerName !== undefined) backendRequest.managerName = elevator.managerName // Backend expects managerName
+    if (elevator.labelDate !== undefined) {
+      // Ensure date is in LocalDate format
+      backendRequest.labelDate = formatDateForAPI(elevator.labelDate)
+    }
+    if (elevator.endDate !== undefined) {
+      // Ensure date is in LocalDate format
+      backendRequest.expiryDate = formatDateForAPI(elevator.endDate)
+    }
+    if (elevator.managerName !== undefined) backendRequest.managerName = elevator.managerName
     if (elevator.managerTcIdentityNumber !== undefined) backendRequest.managerTcIdentityNo = elevator.managerTcIdentityNumber
     if (elevator.managerPhoneNumber !== undefined) backendRequest.managerPhone = elevator.managerPhoneNumber
     
     // Debug: Log payload before sending
     console.log('Elevator update payload:', JSON.stringify(backendRequest, null, 2))
     
-    const { data } = await apiClient.put<ApiResponse<any>>(`/elevators/${id}`, backendRequest)
+    const { data } = await apiClient.put<ApiResponse<any>>(API_ENDPOINTS.ELEVATORS.BY_ID(id), backendRequest)
     const unwrapped = unwrapResponse(data)
     return mapElevatorFromBackend(unwrapped)
   },
 
   delete: async (id: number): Promise<void> => {
-    await apiClient.delete(`/elevators/${id}`)
+    await apiClient.delete(API_ENDPOINTS.ELEVATORS.BY_ID(id))
   },
 }
 

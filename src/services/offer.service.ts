@@ -1,5 +1,7 @@
 import apiClient from '@/lib/api'
 import { unwrapResponse, unwrapArrayResponse, type ApiResponse } from '@/lib/api-response'
+import { formatDateForAPI } from '@/lib/date-utils'
+import { API_ENDPOINTS } from '@/lib/api-endpoints'
 
 export interface OfferItem {
   id: number
@@ -80,7 +82,7 @@ function mapOfferFromBackend(backend: any): Offer {
 export const offerService = {
   getAll: async (): Promise<Offer[]> => {
     try {
-      const { data } = await apiClient.get<ApiResponse<any[]>>('/offers')
+      const { data } = await apiClient.get<ApiResponse<any[]>>(API_ENDPOINTS.OFFERS.BASE)
       const unwrapped = unwrapArrayResponse(data, true)
       return Array.isArray(unwrapped) ? unwrapped.map(mapOfferFromBackend) : []
     } catch (error: any) {
@@ -93,7 +95,7 @@ export const offerService = {
 
   getById: async (id: number): Promise<Offer | null> => {
     try {
-      const { data } = await apiClient.get<ApiResponse<any>>(`/offers/${id}`)
+      const { data } = await apiClient.get<ApiResponse<any>>(API_ENDPOINTS.OFFERS.BY_ID(id))
       const unwrapped = unwrapResponse(data, true)
       return unwrapped ? mapOfferFromBackend(unwrapped) : null
     } catch (error: any) {
@@ -126,9 +128,12 @@ export const offerService = {
       const vatAmount = afterDiscount * (vatRate / 100)
       const totalAmount = afterDiscount + vatAmount
 
+      // Ensure date is in LocalDate format (YYYY-MM-DD)
+      const dateStr = formatDateForAPI(offer.date)
+      
       const backendRequest = {
         elevatorId: offer.elevatorId,
-        date: offer.date,
+        date: dateStr, // LocalDate format
         vatRate: vatRate,
         discountAmount: discountAmount,
         subtotal: subtotal,
@@ -137,7 +142,7 @@ export const offerService = {
         items: offer.items,
       }
 
-      const { data } = await apiClient.post<ApiResponse<any>>('/offers', backendRequest)
+      const { data } = await apiClient.post<ApiResponse<any>>(API_ENDPOINTS.OFFERS.BASE, backendRequest)
       const unwrapped = unwrapResponse(data, true)
       return unwrapped ? mapOfferFromBackend(unwrapped) : null
     } catch (error: any) {
@@ -152,7 +157,10 @@ export const offerService = {
     try {
       const backendRequest: any = {}
       if (offer.elevatorId !== undefined) backendRequest.elevatorId = offer.elevatorId
-      if (offer.date !== undefined) backendRequest.date = offer.date
+      if (offer.date !== undefined) {
+        // Ensure date is in LocalDate format
+        backendRequest.date = formatDateForAPI(offer.date)
+      }
       if (offer.vatRate !== undefined) backendRequest.vatRate = offer.vatRate
       if (offer.discountAmount !== undefined) backendRequest.discountAmount = offer.discountAmount
       if (offer.status !== undefined) backendRequest.status = offer.status
@@ -167,7 +175,7 @@ export const offerService = {
         backendRequest.totalAmount = afterDiscount + vatAmount
       }
 
-      const { data } = await apiClient.put<ApiResponse<any>>(`/offers/${id}`, backendRequest)
+      const { data } = await apiClient.put<ApiResponse<any>>(API_ENDPOINTS.OFFERS.BY_ID(id), backendRequest)
       const unwrapped = unwrapResponse(data, true)
       return unwrapped ? mapOfferFromBackend(unwrapped) : null
     } catch (error: any) {
@@ -180,7 +188,7 @@ export const offerService = {
 
   delete: async (id: number): Promise<void> => {
     try {
-      await apiClient.delete(`/offers/${id}`)
+      await apiClient.delete(API_ENDPOINTS.OFFERS.BY_ID(id))
     } catch (error: any) {
       if (error.response?.status === 404 || error.response?.data?.success === false) {
         return
@@ -191,7 +199,7 @@ export const offerService = {
 
   exportPdf: async (id: number): Promise<Blob | null> => {
     try {
-      const { data } = await apiClient.get(`/offers/${id}/export`, {
+      const { data } = await apiClient.get(`${API_ENDPOINTS.OFFERS.BY_ID(id)}/export`, {
         responseType: 'blob',
       })
       return data

@@ -1,5 +1,7 @@
 import apiClient from '@/lib/api'
 import { unwrapResponse, unwrapArrayResponse, type ApiResponse } from '@/lib/api-response'
+import { formatDateForAPI } from '@/lib/date-utils'
+import { API_ENDPOINTS } from '@/lib/api-endpoints'
 
 // Backend field isimleri: elevatorIdentityNumber, elevatorBuildingName, date, result, description
 export interface Inspection {
@@ -105,9 +107,12 @@ function mapInspectionFromBackend(backend: any): Inspection {
 // Frontend formatını backend formatına çevir
 function mapInspectionToBackend(inspection: CreateInspectionRequest): any {
   // Yeni backend field isimleri: date, result, description, inspectionColor, contactedPersonName
+  // Ensure date is in LocalDate format (YYYY-MM-DD)
+  const dateStr = formatDateForAPI(inspection.denetimTarihi)
+  
   return {
     elevatorId: inspection.elevatorId,
-    date: inspection.denetimTarihi,
+    date: dateStr, // LocalDate format
     result: mapInspectionResultToBackend(inspection.sonuc),
     description: inspection.aciklama || undefined,
     inspectionColor: inspection.inspectionColor,
@@ -119,26 +124,26 @@ export interface UpdateInspectionRequest extends Partial<CreateInspectionRequest
 
 export const inspectionService = {
   getAll: async (): Promise<Inspection[]> => {
-    const { data } = await apiClient.get<ApiResponse<any[]>>('/inspections')
+    const { data } = await apiClient.get<ApiResponse<any[]>>(API_ENDPOINTS.INSPECTIONS.BASE)
     const unwrapped = unwrapArrayResponse(data)
     return unwrapped.map(mapInspectionFromBackend)
   },
 
   getById: async (id: number): Promise<Inspection> => {
-    const { data } = await apiClient.get<ApiResponse<any>>(`/inspections/${id}`)
+    const { data } = await apiClient.get<ApiResponse<any>>(API_ENDPOINTS.INSPECTIONS.BY_ID(id))
     const unwrapped = unwrapResponse(data)
     return mapInspectionFromBackend(unwrapped)
   },
 
   getByElevatorId: async (elevatorId: number): Promise<Inspection[]> => {
-    const { data } = await apiClient.get<ApiResponse<any[]>>(`/inspections/elevator/${elevatorId}`)
+    const { data } = await apiClient.get<ApiResponse<any[]>>(API_ENDPOINTS.INSPECTIONS.BY_ELEVATOR(elevatorId))
     const unwrapped = unwrapArrayResponse(data)
     return unwrapped.map(mapInspectionFromBackend)
   },
 
   create: async (inspection: CreateInspectionRequest): Promise<Inspection> => {
     const backendRequest = mapInspectionToBackend(inspection)
-    const { data } = await apiClient.post<ApiResponse<any>>('/inspections', backendRequest)
+    const { data } = await apiClient.post<ApiResponse<any>>(API_ENDPOINTS.INSPECTIONS.BASE, backendRequest)
     const unwrapped = unwrapResponse(data)
     return mapInspectionFromBackend(unwrapped)
   },

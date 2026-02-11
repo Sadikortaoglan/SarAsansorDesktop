@@ -37,7 +37,7 @@ export function TooltipProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-export function TooltipTrigger({ asChild, children }: { asChild?: boolean; children: React.ReactNode }) {
+export function TooltipTrigger({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Calendar, AlertTriangle } from 'lucide-react'
+import { Calendar, AlertTriangle, FileText } from 'lucide-react'
 import { maintenanceService } from '@/services/maintenance.service'
 import { DateRangeFilterBar } from '@/components/maintenance/DateRangeFilterBar'
 import { TableResponsive } from '@/components/ui/table-responsive'
@@ -9,25 +9,42 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDateShort } from '@/lib/utils'
 import { ActionButtons } from '@/components/ui/action-buttons'
 import { useToast } from '@/components/ui/use-toast'
-import { FileText } from 'lucide-react'
+import { getUserFriendlyErrorMessage } from '@/lib/api-error-handler'
 
 export function MaintenanceUpcomingPage() {
   const { toast } = useToast()
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
-  const { data: maintenances = [], isLoading } = useQuery({
+  const { data: maintenances = [], isLoading, error } = useQuery({
     queryKey: ['maintenances', 'upcoming', dateFrom, dateTo],
     queryFn: async () => {
       const params: { paid?: boolean; dateFrom?: string; dateTo?: string } = {
         paid: false,
       }
-      if (dateFrom) params.dateFrom = dateFrom
-      if (dateTo) params.dateTo = dateTo
+      // DateRangeFilterBar already sends LocalDate format (YYYY-MM-DD)
+      // But ensure it's clean - service layer will also validate
+      if (dateFrom) {
+        params.dateFrom = dateFrom.includes('T') ? dateFrom.split('T')[0] : dateFrom
+      }
+      if (dateTo) {
+        params.dateTo = dateTo.includes('T') ? dateTo.split('T')[0] : dateTo
+      }
       return maintenanceService.getAll(params)
     },
     enabled: true,
   })
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: 'Hata',
+        description: getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+    }
+  }, [error, toast])
 
   const handleFilter = (from: string, to: string) => {
     setDateFrom(from)

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { formatDateForAPI, convertDateTimeToLocalDate } from '@/lib/date-utils'
 
 interface DateRangeFilterBarProps {
   onFilter: (dateFrom: string, dateTo: string) => void
@@ -24,45 +25,53 @@ export function DateRangeFilterBar({ onFilter, isLoading = false, className }: D
     switch (preset) {
       case 'today':
         from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+        to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
         break
       case 'week':
         const dayOfWeek = now.getDay()
         from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek)
-        to = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 6, 23, 59, 59)
+        to = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 6)
         break
       case 'month':
         from = new Date(now.getFullYear(), now.getMonth(), 1)
-        to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+        to = new Date(now.getFullYear(), now.getMonth() + 1, 0)
         break
       case 'year':
         from = new Date(now.getFullYear(), 0, 1)
-        to = new Date(now.getFullYear(), 11, 31, 23, 59, 59)
+        to = new Date(now.getFullYear(), 11, 31)
         break
     }
 
-    const formatDate = (d: Date) => {
-      const year = d.getFullYear()
-      const month = String(d.getMonth() + 1).padStart(2, '0')
-      const day = String(d.getDate()).padStart(2, '0')
-      return `${year}-${month}-${day}`
-    }
+    // Format as LocalDate (YYYY-MM-DD) for API
+    const fromStr = formatDateForAPI(from)
+    const toStr = formatDateForAPI(to)
 
-    const formatDateTime = (d: Date) => {
-      const dateStr = formatDate(d)
-      const hours = String(d.getHours()).padStart(2, '0')
-      const minutes = String(d.getMinutes()).padStart(2, '0')
-      return `${dateStr}T${hours}:${minutes}`
-    }
+    // For datetime-local input, we need to show time but send only date
+    // Set to start of day for display
+    const fromDisplay = `${fromStr}T00:00`
+    const toDisplay = `${toStr}T23:59`
 
-    setDateFrom(formatDateTime(from))
-    setDateTo(formatDateTime(to))
-    onFilter(formatDateTime(from), formatDateTime(to))
+    setDateFrom(fromDisplay)
+    setDateTo(toDisplay)
+    // Send only LocalDate to backend
+    onFilter(fromStr, toStr)
   }
 
   const handleFilter = () => {
     if (dateFrom && dateTo) {
-      onFilter(dateFrom, dateTo)
+      try {
+        // Convert datetime inputs to LocalDate format (YYYY-MM-DD only)
+        const fromLocalDate = convertDateTimeToLocalDate(dateFrom)
+        const toLocalDate = convertDateTimeToLocalDate(dateTo)
+        // Send only LocalDate format to parent
+        onFilter(fromLocalDate, toLocalDate)
+      } catch (error) {
+        console.error('Date conversion error:', error)
+        // Fallback: try to extract date part manually
+        const fromFallback = dateFrom.includes('T') ? dateFrom.split('T')[0] : dateFrom
+        const toFallback = dateTo.includes('T') ? dateTo.split('T')[0] : dateTo
+        onFilter(fromFallback, toFallback)
+      }
     }
   }
 

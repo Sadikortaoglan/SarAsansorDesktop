@@ -1,4 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import { handleApiError, ApiErrorType } from './api-error-handler'
 
 const isDevelopment = import.meta.env.MODE === 'development' || import.meta.env.DEV
 const API_BASE_URL = isDevelopment 
@@ -32,33 +33,52 @@ apiClient.interceptors.request.use(
     const url = config.url || ''
     const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh')
     
+    // Ensure headers object exists
+    if (!config.headers) {
+      config.headers = {} as any
+    }
+    
+    // Set Content-Type (skip for FormData - browser sets it automatically)
+    if (!(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json'
+    }
+    config.headers['Accept'] = 'application/json'
+    
+    // Log request for maintenance-plans endpoint (for debugging)
+    if (url.includes('/maintenance-plans') && config.method === 'post' && config.data) {
+      console.log('🌐 AXIOS REQUEST - URL:', config.url)
+      console.log('🌐 AXIOS REQUEST - Method:', config.method?.toUpperCase())
+      console.log('🌐 AXIOS REQUEST - Headers:', JSON.stringify(config.headers, null, 2))
+      console.log('🌐 AXIOS REQUEST - Body (raw):', JSON.stringify(config.data, null, 2))
+      console.log('🌐 AXIOS REQUEST - Body (parsed):', config.data)
+    }
+    
+    // Add Authorization header for protected endpoints
     if (!isAuthEndpoint) {
       let token = tokenStorage.getAccessToken()
       
       if (token) {
-        if (!config.headers) {
-          config.headers = {} as any
-        }
-        
+        // Clean token (remove 'Bearer ' prefix if present)
         const cleanToken = token.trim().startsWith('Bearer ') 
           ? token.trim().substring(7) 
           : token.trim()
         
-        config.headers.Authorization = `Bearer ${cleanToken}`
+        if (cleanToken) {
+          config.headers.Authorization = `Bearer ${cleanToken}`
+        } else {
+          // Token is empty, clear storage and reject
+          tokenStorage.clearTokens()
+          return Promise.reject(new Error('Authentication required. Please login.'))
+        }
       } else {
+        // No token found, clear storage and reject
         tokenStorage.clearTokens()
         return Promise.reject(new Error('Authentication required. Please login.'))
       }
     } else {
-      if (config.headers) {
-        delete config.headers.Authorization
-      }
+      // Remove Authorization header for auth endpoints
+      delete config.headers.Authorization
     }
-      if (!config.headers) {
-        config.headers = {} as any
-      }
-    config.headers['Content-Type'] = 'application/json'
-    config.headers['Accept'] = 'application/json'
     
     return config
   },
@@ -195,7 +215,20 @@ apiClient.interceptors.response.use(
       }
     }
 
-    return Promise.reject(error)
+    // Use centralized error handler for non-auth errors
+    const apiError = handleApiError(error)
+    
+    // Log error for debugging (except auth errors which are handled above)
+    if (apiError.type !== ApiErrorType.AUTHENTICATION && apiError.type !== ApiErrorType.AUTHORIZATION) {
+      console.error('API Error:', {
+        type: apiError.type,
+        message: apiError.message,
+        statusCode: apiError.statusCode,
+        url: originalRequest?.url,
+      })
+    }
+    
+    return Promise.reject(apiError)
   }
 )
 

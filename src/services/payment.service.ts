@@ -1,5 +1,7 @@
 import apiClient from '@/lib/api'
 import { unwrapResponse, unwrapArrayResponse, type ApiResponse } from '@/lib/api-response'
+import { formatDateForAPI, convertDateTimeToLocalDate } from '@/lib/date-utils'
+import { API_ENDPOINTS } from '@/lib/api-endpoints'
 
 // Backend field isimleri: amount (tutar), payerName, date (odemeTarihi), note (aciklama)
 export interface Payment {
@@ -75,33 +77,70 @@ function mapPaymentFromBackend(backend: any): Payment {
 
 export const paymentService = {
   getAll: async (params?: { dateFrom?: string; dateTo?: string }): Promise<Payment[]> => {
-    const { data } = await apiClient.get<ApiResponse<any[]>>('/payments', { params })
+    // Convert datetime to LocalDate if needed
+    const cleanParams: { dateFrom?: string; dateTo?: string } = {}
+    if (params?.dateFrom) {
+      try {
+        cleanParams.dateFrom = convertDateTimeToLocalDate(params.dateFrom)
+      } catch {
+        cleanParams.dateFrom = params.dateFrom.split('T')[0] // Fallback
+      }
+    }
+    if (params?.dateTo) {
+      try {
+        cleanParams.dateTo = convertDateTimeToLocalDate(params.dateTo)
+      } catch {
+        cleanParams.dateTo = params.dateTo.split('T')[0] // Fallback
+      }
+    }
+    
+    const { data } = await apiClient.get<ApiResponse<any[]>>(API_ENDPOINTS.PAYMENTS.BASE, { params: cleanParams })
     const unwrapped = unwrapArrayResponse(data)
     return unwrapped.map(mapPaymentFromBackend)
   },
 
   create: async (payment: CreatePaymentRequest): Promise<Payment> => {
+    // Ensure date is in LocalDate format (YYYY-MM-DD)
+    const dateStr = formatDateForAPI(payment.date)
+    
     const backendRequest = {
       maintenanceId: payment.maintenanceId,
       amount: payment.amount,
       payerName: payment.payerName,
-      date: payment.date,
+      date: dateStr, // LocalDate format
       note: payment.note,
     }
-    const { data } = await apiClient.post<ApiResponse<any>>('/payments', backendRequest)
+    const { data } = await apiClient.post<ApiResponse<any>>(API_ENDPOINTS.PAYMENTS.BASE, backendRequest)
     const unwrapped = unwrapResponse(data)
     return mapPaymentFromBackend(unwrapped)
   },
 
   getById: async (id: number): Promise<Payment> => {
-    const { data } = await apiClient.get<ApiResponse<any>>(`/payments/${id}`)
+    const { data } = await apiClient.get<ApiResponse<any>>(API_ENDPOINTS.PAYMENTS.BY_ID(id))
     const unwrapped = unwrapResponse(data)
     return mapPaymentFromBackend(unwrapped)
   },
 
   getSummary: async (params?: { dateFrom?: string; dateTo?: string }): Promise<PaymentSummary | null> => {
     try {
-      const { data } = await apiClient.get<ApiResponse<PaymentSummary>>('/payments/summary', { params })
+      // Convert datetime to LocalDate if needed
+      const cleanParams: { dateFrom?: string; dateTo?: string } = {}
+      if (params?.dateFrom) {
+        try {
+          cleanParams.dateFrom = convertDateTimeToLocalDate(params.dateFrom)
+        } catch {
+          cleanParams.dateFrom = params.dateFrom.split('T')[0] // Fallback
+        }
+      }
+      if (params?.dateTo) {
+        try {
+          cleanParams.dateTo = convertDateTimeToLocalDate(params.dateTo)
+        } catch {
+          cleanParams.dateTo = params.dateTo.split('T')[0] // Fallback
+        }
+      }
+      
+      const { data } = await apiClient.get<ApiResponse<PaymentSummary>>('/payments/summary', { params: cleanParams })
       return unwrapResponse(data, true)
     } catch (error: any) {
       if (error.response?.status === 404 || error.response?.data?.success === false) {

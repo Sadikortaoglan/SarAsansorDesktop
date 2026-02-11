@@ -1,41 +1,57 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { convertDateTimeToLocalDate } from '@/lib/date-utils'
 import { FileText } from 'lucide-react'
 import { maintenanceService } from '@/services/maintenance.service'
 import { DateRangeFilterBar } from '@/components/maintenance/DateRangeFilterBar'
 import { TableResponsive } from '@/components/ui/table-responsive'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDateShort } from '@/lib/utils'
 import { ActionButtons } from '@/components/ui/action-buttons'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useToast } from '@/components/ui/use-toast'
+import { getUserFriendlyErrorMessage } from '@/lib/api-error-handler'
 
 export function MaintenanceCompletedPage() {
   const { toast } = useToast()
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
-  const { data: maintenances = [], isLoading } = useQuery({
+  const { data: maintenances = [], isLoading, error } = useQuery({
     queryKey: ['maintenances', 'completed', dateFrom, dateTo],
     queryFn: async () => {
       const params: { paid?: boolean; dateFrom?: string; dateTo?: string } = {
         paid: true,
       }
-      if (dateFrom) params.dateFrom = dateFrom
-      if (dateTo) params.dateTo = dateTo
+      // DateRangeFilterBar sends LocalDate format, but ensure it's clean
+      if (dateFrom) {
+        params.dateFrom = convertDateTimeToLocalDate(dateFrom)
+      }
+      if (dateTo) {
+        params.dateTo = convertDateTimeToLocalDate(dateTo)
+      }
       return maintenanceService.getAll(params)
     },
     enabled: true,
   })
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: 'Hata',
+        description: getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+    }
+  }, [error, toast])
 
   const handleFilter = (from: string, to: string) => {
     setDateFrom(from)
     setDateTo(to)
   }
 
-  const getStatusBadge = (isPaid: boolean, paymentDate?: string) => {
+  const getStatusBadge = (isPaid: boolean) => {
     if (isPaid) {
       return (
         <Badge variant="completed" className="flex items-center gap-1.5">
@@ -101,7 +117,7 @@ export function MaintenanceCompletedPage() {
       header: 'Durum',
       mobileLabel: 'Durum',
       mobilePriority: 5,
-      render: (row: any) => getStatusBadge(row.odendi, row.odemeTarihi),
+      render: (row: any) => getStatusBadge(row.odendi),
     },
     {
       key: 'actions',

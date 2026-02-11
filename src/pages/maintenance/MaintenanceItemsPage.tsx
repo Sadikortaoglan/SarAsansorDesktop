@@ -256,30 +256,18 @@ export function MaintenanceItemsPage() {
                           hideOnMobile: false,
                           render: (item: any) => (
                             <ActionButtons
-                              items={[
-                                {
-                                  icon: Edit,
-                                  tooltip: 'Düzenle',
-                                  onClick: () => {
-                                    toast({
-                                      title: 'Düzenle',
-                                      description: `Madde ID: ${item.id}`,
-                                    })
-                                  },
-                                  variant: 'warning',
-                                },
-                                {
-                                  icon: Trash2,
-                                  tooltip: 'Sil',
-                                  onClick: () => {
-                                    toast({
-                                      title: 'Sil',
-                                      description: `Madde ID: ${item.id}`,
-                                    })
-                                  },
-                                  variant: 'destructive',
-                                },
-                              ]}
+                              onEdit={() => {
+                                toast({
+                                  title: 'Düzenle',
+                                  description: `Madde ID: ${item.id}`,
+                                })
+                              }}
+                              onDelete={() => {
+                                toast({
+                                  title: 'Sil',
+                                  description: `Madde ID: ${item.id}`,
+                                })
+                              }}
                             />
                           ),
                         },
@@ -335,36 +323,19 @@ export function MaintenanceItemsPage() {
       hideOnMobile: false,
       render: (template: any) => (
         <ActionButtons
-          items={[
-            {
-              icon: Settings,
-              tooltip: 'Maddeleri Yönet',
-              onClick: () => setSelectedTemplate(template.id),
-              variant: 'primary',
-            },
-            {
-              icon: Edit,
-              tooltip: 'Düzenle',
-              onClick: () => {
-                toast({
-                  title: 'Düzenle',
-                  description: `Şablon ID: ${template.id}`,
-                })
-              },
-              variant: 'warning',
-            },
-            {
-              icon: Trash2,
-              tooltip: 'Sil',
-              onClick: () => {
-                toast({
-                  title: 'Sil',
-                  description: `Şablon ID: ${template.id}`,
-                })
-              },
-              variant: 'destructive',
-            },
-          ]}
+          onMaintenance={() => setSelectedTemplate(template.id)}
+          onEdit={() => {
+            toast({
+              title: 'Düzenle',
+              description: `Şablon ID: ${template.id}`,
+            })
+          }}
+          onDelete={() => {
+            toast({
+              title: 'Sil',
+              description: `Şablon ID: ${template.id}`,
+            })
+          }}
         />
       ),
     },
