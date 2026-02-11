@@ -37,6 +37,7 @@ export const API_ENDPOINTS = {
     BASE: '/maintenance-plans',
     BY_ID: (id: number) => `/maintenance-plans/${id}`,
     COMPLETE: (id: number) => `/maintenance-plans/${id}/complete`,
+    RESCHEDULE: (id: number) => `/maintenance-plans/${id}/reschedule`,
   },
 
   // Inspections

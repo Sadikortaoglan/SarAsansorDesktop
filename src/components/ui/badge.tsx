@@ -27,6 +27,10 @@ const badgeVariants = cva(
         failed: 'border-transparent bg-[#FEE2E2] text-[#991B1B]',
         open: 'border-transparent bg-[#FEE2E2] text-[#991B1B]',
         completed: 'border-transparent bg-[#DCFCE7] text-[#166534]',
+        // Premium SaaS Status Badges - Blue + Emerald system
+        planned: 'border-transparent bg-[#DBEAFE] text-[#1E40AF]', // Blue for PLANNED
+        inProgress: 'border-transparent bg-[#FED7AA] text-[#9A3412]', // Orange for IN_PROGRESS
+        aborted: 'border-transparent bg-[#FEE2E2] text-[#991B1B]', // Red for ABORTED
       },
     },
     defaultVariants: {

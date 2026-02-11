@@ -11,6 +11,7 @@ import { formatDateShort } from '@/lib/utils'
 import { ActionButtons } from '@/components/ui/action-buttons'
 import { useToast } from '@/components/ui/use-toast'
 import { getUserFriendlyErrorMessage } from '@/lib/api-error-handler'
+import { formatElevatorDisplayName } from '@/lib/elevator-format'
 
 export function MaintenanceCompletedPage() {
   const { toast } = useToast()
@@ -83,16 +84,29 @@ export function MaintenanceCompletedPage() {
       header: 'Asansör',
       mobileLabel: 'Asansör',
       mobilePriority: 2,
-      render: (row: any) => (
-        <div>
-          <div className="font-medium">
-            {row.elevator?.kimlikNo || `ELEV-${row.elevatorId}`}
+      render: (row: any) => {
+        const displayInfo = formatElevatorDisplayName(row.elevator || {
+          kimlikNo: row.elevator?.kimlikNo,
+          bina: row.elevatorBuildingName || row.elevator?.bina,
+          adres: row.elevator?.adres,
+        })
+        return (
+          <div>
+            <div className="font-semibold text-[#111827]">
+              🛗 {displayInfo.fullName}
+            </div>
+            <div className="text-sm text-[#6B7280] mt-1">
+              {row.elevatorBuildingName || row.elevator?.bina || '-'}
+              {row.elevator?.adres && ` • ${row.elevator.adres}`}
+            </div>
+            <div className="mt-1">
+              <Badge variant="outline" className="text-xs text-[#9CA3AF] border-[#E5E7EB]">
+                ({displayInfo.technicalCode})
+              </Badge>
+            </div>
           </div>
-          <div className="text-sm text-muted-foreground">
-            {row.elevatorBuildingName || row.elevator?.bina || '-'}
-          </div>
-        </div>
-      ),
+        )
+      },
     },
     {
       key: 'aciklama',
@@ -139,44 +153,53 @@ export function MaintenanceCompletedPage() {
   ]
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tamamlanan Bakımlar</h1>
-          <p className="text-muted-foreground mt-1">
-            Tamamlanmış bakım kayıtlarını görüntüleyin ve filtreleyin
-          </p>
+    <div className="min-h-screen bg-[#F9FAFB]">
+      {/* Premium Page Header */}
+      <div className="bg-white border-b border-[#E5E7EB] shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-[#111827]">Tamamlanan Bakımlar</h1>
+              <p className="text-sm text-[#6B7280] mt-1">
+                Tamamlanmış bakım kayıtlarını görüntüleyin ve filtreleyin
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <DateRangeFilterBar onFilter={handleFilter} isLoading={isLoading} />
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <DateRangeFilterBar onFilter={handleFilter} isLoading={isLoading} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bakım Listesi</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-muted-foreground">Yükleniyor...</div>
-            </div>
-          ) : maintenances.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-lg font-medium text-gray-900 mb-1">Sonuç bulunamadı</p>
-              <p className="text-sm text-muted-foreground">
-                Seçilen tarih aralığında tamamlanmış bakım kaydı bulunmamaktadır.
-              </p>
-            </div>
-          ) : (
-            <TableResponsive
-              data={maintenances}
-              columns={columns}
-              keyExtractor={(item) => String(item.id)}
-            />
-          )}
-        </CardContent>
-      </Card>
+        <Card className="bg-white border border-[#E5E7EB] shadow-sm rounded-xl overflow-hidden mt-6">
+          <CardHeader className="bg-gradient-to-r from-indigo-50/50 to-teal-50/50 border-b border-[#E5E7EB]">
+            <CardTitle className="text-lg font-semibold text-[#111827]">Bakım Listesi</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-[#6B7280]">Yükleniyor...</div>
+              </div>
+            ) : maintenances.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="p-4 bg-[#F3F4F6] rounded-full mb-4">
+                  <FileText className="h-8 w-8 text-[#9CA3AF]" />
+                </div>
+                <p className="text-lg font-semibold text-[#111827] mb-1">Sonuç bulunamadı</p>
+                <p className="text-sm text-[#6B7280] max-w-md">
+                  Seçilen tarih aralığında tamamlanmış bakım kaydı bulunmamaktadır.
+                </p>
+              </div>
+            ) : (
+              <TableResponsive
+                data={maintenances}
+                columns={columns}
+                keyExtractor={(item) => String(item.id)}
+              />
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

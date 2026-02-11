@@ -13,6 +13,7 @@ export interface MaintenancePlan {
   status: 'PLANNED' | 'COMPLETED' | 'CANCELLED'
   completedDate?: string
   qrCode?: string
+  note?: string // Backend'den gelen not
   createdAt: string
   updatedAt: string
 }
@@ -28,6 +29,13 @@ export interface CreateMaintenancePlanRequest {
 export interface UpdateMaintenancePlanRequest {
   plannedDate?: string // Backend expects "plannedDate", not "scheduledDate"
   status?: 'PLANNED' | 'COMPLETED' | 'CANCELLED'
+  templateId?: number // Optional - update template
+  technicianId?: number // Backend expects "technicianId", not "assignedTechnicianId"
+  note?: string // Optional - update note
+}
+
+export interface RescheduleMaintenancePlanRequest {
+  plannedDate: string // YYYY-MM-DD - Required for reschedule
 }
 
 function mapPlanFromBackend(backend: any): MaintenancePlan {
@@ -42,6 +50,7 @@ function mapPlanFromBackend(backend: any): MaintenancePlan {
     status: backend.status || 'PLANNED',
     completedDate: backend.completedDate || backend.completed_date,
     qrCode: backend.qrCode || backend.qr_code,
+    note: backend.note || undefined,
     createdAt: backend.createdAt || backend.created_at,
     updatedAt: backend.updatedAt || backend.updated_at,
   }
@@ -166,7 +175,31 @@ export const maintenancePlanService = {
       payload.status = plan.status
     }
     
+    if (plan.templateId) {
+      payload.templateId = Number(plan.templateId)
+    }
+    
+    // Backend expects "technicianId", not "assignedTechnicianId"
+    if (plan.technicianId) {
+      payload.technicianId = Number(plan.technicianId)
+    }
+    
+    if (plan.note !== undefined) {
+      payload.note = plan.note
+    }
+    
     const { data } = await apiClient.put<ApiResponse<any>>(API_ENDPOINTS.MAINTENANCE_PLANS.BY_ID(id), payload)
+    const unwrapped = unwrapResponse(data)
+    return mapPlanFromBackend(unwrapped)
+  },
+
+  reschedule: async (id: number, plan: RescheduleMaintenancePlanRequest): Promise<MaintenancePlan> => {
+    // Reschedule endpoint - sadece tarih değiştirmek için
+    const payload = {
+      plannedDate: formatDateForAPI(plan.plannedDate),
+    }
+    
+    const { data } = await apiClient.patch<ApiResponse<any>>(API_ENDPOINTS.MAINTENANCE_PLANS.RESCHEDULE(id), payload)
     const unwrapped = unwrapResponse(data)
     return mapPlanFromBackend(unwrapped)
   },
