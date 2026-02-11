@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Calendar, QrCode, CheckCircle2, Clock, X, Edit, Eye, Play, FileText } from 'lucide-react'
+import { Calendar, QrCode, CheckCircle2, Clock, X, Edit, Eye, Play, FileText, Search, Filter } from 'lucide-react'
 import { maintenancePlanService, type MaintenancePlan } from '@/services/maintenance-plan.service'
 import { maintenanceExecutionService } from '@/services/maintenance-execution.service'
 import { elevatorService } from '@/services/elevator.service'
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
 import { formatElevatorDisplayName } from '@/lib/elevator-format'
 import { formatDateForAPI } from '@/lib/date-utils'
@@ -37,6 +38,12 @@ export function MaintenancePage() {
   const [completePhotos, setCompletePhotos] = useState<File[]>([])
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
   const [planToCancel, setPlanToCancel] = useState<MaintenancePlan | null>(null)
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedElevatorId, setSelectedElevatorId] = useState<number | null>(null)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   // Fetch elevators for display
   const { data: elevators = [] } = useQuery({
@@ -55,13 +62,62 @@ export function MaintenancePage() {
     },
   })
 
-  // Filter plans by selected status - Exclude CANCELLED and NOT_PLANNED
+  // Filter plans by selected status and filters - Exclude CANCELLED and NOT_PLANNED
   const filteredPlans = allPlans.filter((plan) => {
     // Always exclude cancelled and not planned plans
     if (plan.status === 'CANCELLED' || plan.status === 'NOT_PLANNED') return false
     
-    if (selectedStatus === 'ALL') return true
-    return plan.status === selectedStatus
+    // Status filter
+    if (selectedStatus !== 'ALL' && plan.status !== selectedStatus) return false
+    
+    // Elevator filter
+    if (selectedElevatorId && plan.elevatorId !== selectedElevatorId) return false
+    
+    // Search term filter (elevator name, building, code)
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase()
+      const elevator = elevators.find((e) => e.id === plan.elevatorId)
+      const displayInfo = formatElevatorDisplayName(
+        elevator || {
+          kimlikNo: plan.elevatorCode || plan.elevatorName || '',
+          bina: plan.buildingName || '',
+          adres: undefined,
+        }
+      )
+      
+      const searchableText = [
+        displayInfo.fullName,
+        displayInfo.technicalCode,
+        plan.buildingName,
+        plan.elevatorCode,
+        plan.elevatorName,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      
+      if (!searchableText.includes(searchLower)) return false
+    }
+    
+    // Date range filter
+    if (dateFrom || dateTo) {
+      const planDate = new Date(plan.scheduledDate)
+      planDate.setHours(0, 0, 0, 0)
+      
+      if (dateFrom) {
+        const fromDate = new Date(dateFrom)
+        fromDate.setHours(0, 0, 0, 0)
+        if (planDate < fromDate) return false
+      }
+      
+      if (dateTo) {
+        const toDate = new Date(dateTo)
+        toDate.setHours(23, 59, 59, 999)
+        if (planDate > toDate) return false
+      }
+    }
+    
+    return true
   })
 
   // Log state after query
@@ -270,10 +326,64 @@ export function MaintenancePage() {
   }
 
   const getStatusCount = (status: StatusFilter) => {
+    // Apply same filters as filteredPlans but only for status
+    const baseFiltered = allPlans.filter((plan) => {
+      if (plan.status === 'CANCELLED' || plan.status === 'NOT_PLANNED') return false
+      
+      // Elevator filter
+      if (selectedElevatorId && plan.elevatorId !== selectedElevatorId) return false
+      
+      // Search term filter
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase()
+        const elevator = elevators.find((e) => e.id === plan.elevatorId)
+        const displayInfo = formatElevatorDisplayName(
+          elevator || {
+            kimlikNo: plan.elevatorCode || plan.elevatorName || '',
+            bina: plan.buildingName || '',
+            adres: undefined,
+          }
+        )
+        
+        const searchableText = [
+          displayInfo.fullName,
+          displayInfo.technicalCode,
+          plan.buildingName,
+          plan.elevatorCode,
+          plan.elevatorName,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        
+        if (!searchableText.includes(searchLower)) return false
+      }
+      
+      // Date range filter
+      if (dateFrom || dateTo) {
+        const planDate = new Date(plan.scheduledDate)
+        planDate.setHours(0, 0, 0, 0)
+        
+        if (dateFrom) {
+          const fromDate = new Date(dateFrom)
+          fromDate.setHours(0, 0, 0, 0)
+          if (planDate < fromDate) return false
+        }
+        
+        if (dateTo) {
+          const toDate = new Date(dateTo)
+          toDate.setHours(23, 59, 59, 999)
+          if (planDate > toDate) return false
+        }
+      }
+      
+      return true
+    })
+    
     if (status === 'ALL') {
-      return allPlans.filter((p) => p.status !== 'CANCELLED').length
+      return baseFiltered.length
     }
-    return allPlans.filter((p) => p.status === status).length
+    return baseFiltered.filter((p) => p.status === status).length
   }
 
   return (
@@ -293,8 +403,11 @@ export function MaintenancePage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-8 py-8">
-        {/* Status Tabs */}
-        <Tabs value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as StatusFilter)}>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Main Content Area */}
+          <div className="lg:col-span-3">
+            {/* Status Tabs */}
+            <Tabs value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as StatusFilter)}>
           <TabsList className="flex w-full max-w-2xl bg-[#F3F4F6] p-2 gap-3 rounded-xl shadow-sm">
             <TabsTrigger
               value="ALL"
@@ -500,6 +613,107 @@ export function MaintenancePage() {
             )}
           </TabsContent>
         </Tabs>
+          </div>
+
+          {/* Filter Panel - Right Side */}
+          <div className="lg:col-span-1">
+            <Card className="bg-white border border-[#E5E7EB] shadow-[0_1px_3px_rgba(0,0,0,0.08)] rounded-xl sticky top-8">
+              <CardHeader className="pb-4 bg-white border-b border-[#E5E7EB]">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-5 w-5 text-[#4F46E5]" />
+                  <CardTitle className="text-lg font-bold text-[#111827]">Filtreler</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                {/* Search Input */}
+                <div className="space-y-2">
+                  <Label htmlFor="search">Asansör Ara</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
+                    <Input
+                      id="search"
+                      placeholder="Asansör, bina veya kod ara..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                {/* Elevator Select */}
+                <div className="space-y-2">
+                  <Label htmlFor="elevator">Asansör Seç</Label>
+                  <Select
+                    value={selectedElevatorId ? String(selectedElevatorId) : 'all'}
+                    onValueChange={(value) => setSelectedElevatorId(value === 'all' ? null : Number(value))}
+                  >
+                    <SelectTrigger className="h-[44px] bg-white border-[#D1D5DB] rounded-[8px]">
+                      <SelectValue placeholder="Tüm asansörler" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tüm asansörler</SelectItem>
+                      {elevators.map((elevator) => {
+                        const displayInfo = formatElevatorDisplayName(elevator)
+                        return (
+                          <SelectItem key={elevator.id} value={String(elevator.id)}>
+                            {displayInfo.fullName}
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Date From */}
+                <div className="space-y-2">
+                  <Label htmlFor="dateFrom">Başlangıç Tarihi</Label>
+                  <Input
+                    id="dateFrom"
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                  />
+                </div>
+
+                {/* Date To */}
+                <div className="space-y-2">
+                  <Label htmlFor="dateTo">Bitiş Tarihi</Label>
+                  <Input
+                    id="dateTo"
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    min={dateFrom || undefined}
+                  />
+                </div>
+
+                {/* Clear Filters Button */}
+                {(searchTerm || selectedElevatorId || dateFrom || dateTo) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchTerm('')
+                      setSelectedElevatorId(null)
+                      setDateFrom('')
+                      setDateTo('')
+                    }}
+                    className="w-full"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Filtreleri Temizle
+                  </Button>
+                )}
+
+                {/* Results Count */}
+                <div className="pt-4 border-t border-[#E5E7EB]">
+                  <p className="text-sm text-[#6B7280]">
+                    <span className="font-semibold text-[#111827]">{filteredPlans.length}</span> sonuç bulundu
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
 
       {/* QR Scanner Modal (for Start) */}
