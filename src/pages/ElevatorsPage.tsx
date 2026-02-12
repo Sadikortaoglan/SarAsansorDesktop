@@ -23,6 +23,7 @@ import { Plus, Search, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { formatDateShort, cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
+import { ElevatorQRValidationDialog } from '@/components/maintenance/ElevatorQRValidationDialog'
 import { ActionButtons } from '@/components/ui/action-buttons'
 
 export function ElevatorsPage() {
@@ -32,6 +33,9 @@ export function ElevatorsPage() {
   const [isMaintenanceDialogOpen, setIsMaintenanceDialogOpen] = useState(false)
   const [selectedElevator, setSelectedElevator] = useState<Elevator | null>(null)
   const [elevatorForMaintenance, setElevatorForMaintenance] = useState<Elevator | null>(null)
+  const [isQRValidationDialogOpen, setIsQRValidationDialogOpen] = useState(false)
+  const [elevatorForQR, setElevatorForQR] = useState<Elevator | null>(null)
+  const [validatedQRSessionToken, setValidatedQRSessionToken] = useState<string | null>(null)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [elevatorToDelete, setElevatorToDelete] = useState<number | null>(null)
   const navigate = useNavigate()
@@ -281,11 +285,13 @@ export function ElevatorsPage() {
               hideOnMobile: false,
               render: (elevator: Elevator) => (
                 <div className="flex items-center justify-end">
+                  {/* TODO: Sadık geçici olarak bakım ekleme butonlarını kapattı (QR flow revize ediliyor) */}
+                  {/* onMaintenance={() => {
+                    setElevatorForMaintenance(elevator)
+                    setElevatorForQR(elevator)
+                    setIsQRValidationDialogOpen(true)
+                  }} */}
                   <ActionButtons
-                    onMaintenance={() => {
-                      setElevatorForMaintenance(elevator)
-                      setIsMaintenanceDialogOpen(true)
-                    }}
                     onView={() => navigate(`/elevators/${elevator.id}`)}
                     onEdit={async () => {
                       try {
@@ -322,20 +328,54 @@ export function ElevatorsPage() {
         variant="destructive"
       />
 
+      {/* QR Validation Dialog */}
+      {elevatorForQR && (
+        <ElevatorQRValidationDialog
+          open={isQRValidationDialogOpen}
+          onOpenChange={(open) => {
+            setIsQRValidationDialogOpen(open)
+            if (!open) {
+              setElevatorForQR(null)
+              setValidatedQRSessionToken(null)
+            }
+          }}
+          elevatorId={elevatorForQR.id}
+          elevatorCode={elevatorForQR.kimlikNo}
+          onValidationSuccess={(qrSessionToken) => {
+            setValidatedQRSessionToken(qrSessionToken)
+            setIsQRValidationDialogOpen(false)
+            setIsMaintenanceDialogOpen(true)
+          }}
+        />
+      )}
+
+      {/* Maintenance Form Dialog */}
       <Dialog open={isMaintenanceDialogOpen} onOpenChange={setIsMaintenanceDialogOpen}>
         {elevatorForMaintenance && (
           <MaintenanceFormDialog
             elevatorId={elevatorForMaintenance.id}
             elevatorName={`${elevatorForMaintenance.kimlikNo} - ${elevatorForMaintenance.bina}`}
+            qrSessionToken={validatedQRSessionToken || undefined}
             onClose={() => {
               setIsMaintenanceDialogOpen(false)
               setElevatorForMaintenance(null)
+              setValidatedQRSessionToken(null)
             }}
             onSuccess={() => {
               setIsMaintenanceDialogOpen(false)
               setElevatorForMaintenance(null)
+              setValidatedQRSessionToken(null)
+              
+              // Invalidate elevators to refresh any maintenance counts
               queryClient.invalidateQueries({ queryKey: ['elevators'] })
+              
+              // Invalidate all maintenance-related queries to refresh lists
               queryClient.invalidateQueries({ queryKey: ['maintenances'] })
+              queryClient.invalidateQueries({ queryKey: ['maintenances', 'all'] })
+              queryClient.invalidateQueries({ queryKey: ['maintenances', 'summary'] })
+              
+              // Refetch maintenance list immediately
+              queryClient.refetchQueries({ queryKey: ['maintenances'] })
             }}
           />
         )}

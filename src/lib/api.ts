@@ -38,8 +38,11 @@ apiClient.interceptors.request.use(
       config.headers = {} as any
     }
     
-    // Set Content-Type (skip for FormData - browser sets it automatically)
-    if (!(config.data instanceof FormData)) {
+    // Set Content-Type (skip for FormData - browser sets it automatically with boundary)
+    if (config.data instanceof FormData) {
+      // Remove Content-Type header for FormData - browser will set it automatically with boundary
+      delete config.headers['Content-Type']
+    } else {
       config.headers['Content-Type'] = 'application/json'
     }
     config.headers['Accept'] = 'application/json'

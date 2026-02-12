@@ -232,5 +232,43 @@ export const elevatorService = {
   delete: async (id: number): Promise<void> => {
     await apiClient.delete(API_ENDPOINTS.ELEVATORS.BY_ID(id))
   },
+
+  /**
+   * Validate elevator QR code
+   * QR format: https://app.saraasansor.com/qr-start?e={elevatorCode}&s={signature}
+   */
+  validateQRCode: async (elevatorCode: string, signature: string): Promise<{
+    valid: boolean
+    elevatorId?: number
+    elevatorCode?: string
+    buildingName?: string
+    error?: string
+  }> => {
+    try {
+      const { data } = await apiClient.get<ApiResponse<any>>(API_ENDPOINTS.QR_VALIDATE, {
+        params: { e: elevatorCode, s: signature },
+      })
+      const unwrapped = unwrapResponse(data)
+      
+      if (unwrapped.valid) {
+        return {
+          valid: true,
+          elevatorId: unwrapped.elevatorId,
+          elevatorCode: unwrapped.elevatorCode,
+          buildingName: unwrapped.buildingName,
+        }
+      }
+      
+      return {
+        valid: false,
+        error: unwrapped.error || 'Geçersiz QR kodu',
+      }
+    } catch (error: any) {
+      return {
+        valid: false,
+        error: error.response?.data?.message || 'QR kodu doğrulanamadı',
+      }
+    }
+  },
 }
 

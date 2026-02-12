@@ -21,6 +21,9 @@ export const API_ENDPOINTS = {
   ELEVATORS: {
     BASE: '/elevators',
     BY_ID: (id: number) => `/elevators/${id}`,
+    QR: (id: number) => `/elevators/${id}/qr`,
+    QR_PDF: (id: number) => `/elevators/${id}/qr/pdf`,
+    QR_URL: (id: number) => `/elevators/${id}/qr-url`,
   },
 
   // Maintenances
@@ -39,8 +42,12 @@ export const API_ENDPOINTS = {
     COMPLETE: (id: number) => `/maintenance-plans/${id}/complete`,
     RESCHEDULE: (id: number) => `/maintenance-plans/${id}/reschedule`,
     START: (id: number) => `/maintenance-plans/${id}/start`,
+    QR_TOKEN: (id: number) => `/maintenance-plans/${id}/qr-token`,
     // Note: /upcoming endpoint doesn't exist, use BASE with status=PLANNED query param
   },
+
+  // Maintenance Start (new secure endpoint)
+  MAINTENANCE_START: '/api/maintenance/start',
 
   // Maintenance Templates
   MAINTENANCE_TEMPLATES: {
@@ -103,6 +110,12 @@ export const API_ENDPOINTS = {
   WARNINGS: {
     BASE: '/warnings',
     GROUPED: '/warnings/grouped',
+  },
+
+  // QR Session
+  QR_SESSION: {
+    VALIDATE: '/qr/validate',
+    REMOTE_START: '/qr/remote-start',
   },
 
   // Offers

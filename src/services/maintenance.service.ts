@@ -24,6 +24,7 @@ export interface Maintenance {
 export type LabelType = 'GREEN' | 'BLUE' | 'YELLOW' | 'RED'
 
 // Backend field isimleri: teknisyenUserId (opsiyonel), labelType, photos
+// QR session token sent as X-QR-SESSION-TOKEN header
 export interface CreateMaintenanceRequest {
   elevatorId: number
   tarih: string
@@ -32,6 +33,7 @@ export interface CreateMaintenanceRequest {
   ucret: number
   teknisyenUserId?: number // Backend'de var ama opsiyonel
   photos?: File[] // Fotoğraflar (opsiyonel)
+  qrSessionToken?: string // QR session token (sent as header, required for TECHNICIAN, optional for ADMIN)
 }
 
 export interface UpdateMaintenanceRequest extends Partial<CreateMaintenanceRequest> {}
@@ -141,34 +143,54 @@ export const maintenanceService = {
   },
 
   create: async (maintenance: CreateMaintenanceRequest): Promise<Maintenance> => {
-    // Yeni backend field isimleri: date, description, technicianUserId, amount, labelType
+    // Backend expects multipart/form-data with:
+    // - "data" part: JSON string containing all text fields
+    // - "photos" part(s): MultipartFile[] for photos
     // Ensure date is in LocalDate format (YYYY-MM-DD)
     const dateStr = formatDateForAPI(maintenance.tarih)
     
+    // Create FormData
     const formData = new FormData()
-    formData.append('elevatorId', String(maintenance.elevatorId))
-    formData.append('date', dateStr) // LocalDate format
-    formData.append('labelType', maintenance.labelType)
-    formData.append('description', maintenance.aciklama)
-    formData.append('amount', String(maintenance.ucret))
     
-    // Opsiyonel field'lar
-    if (maintenance.teknisyenUserId) {
-      formData.append('technicianUserId', String(maintenance.teknisyenUserId))
+    // Create JSON object for "data" part
+    const dataObject: any = {
+      elevatorId: maintenance.elevatorId,
+      date: dateStr, // LocalDate format (YYYY-MM-DD)
+      labelType: maintenance.labelType,
+      description: maintenance.aciklama,
+      amount: maintenance.ucret,
     }
     
-    // Fotoğraflar
+    // Optional fields
+    if (maintenance.teknisyenUserId) {
+      dataObject.technicianUserId = maintenance.teknisyenUserId
+    }
+    
+    // Append "data" part as JSON string with Content-Type
+    // Backend expects @RequestPart("data") String dataJson with Content-Type: application/json
+    const dataBlob = new Blob([JSON.stringify(dataObject)], { type: 'application/json' })
+    formData.append('data', dataBlob)
+    
+    // Append photos - loop through and append each file with same field name "photos"
     if (maintenance.photos && maintenance.photos.length > 0) {
-      maintenance.photos.forEach((photo) => {
-        formData.append(`photos`, photo)
+      maintenance.photos.forEach((file) => {
+        formData.append('photos', file) // Same field name for multiple files
       })
     }
     
-    const { data } = await apiClient.post<ApiResponse<any>>(API_ENDPOINTS.MAINTENANCES.BASE, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
+    // QR Session Token - send as header, NOT in form data
+    const headers: Record<string, string> = {}
+    if (maintenance.qrSessionToken) {
+      headers['X-QR-SESSION-TOKEN'] = maintenance.qrSessionToken
+    }
+    
+    // DO NOT set Content-Type header - browser will set it automatically with boundary
+    // axios will automatically detect FormData and NOT set Content-Type
+    const { data } = await apiClient.post<ApiResponse<any>>(
+      API_ENDPOINTS.MAINTENANCES.BASE,
+      formData,
+      { headers }
+    )
     const unwrapped = unwrapResponse(data)
     return mapMaintenanceFromBackend(unwrapped)
   },

@@ -9,7 +9,6 @@ import { TableResponsive } from '@/components/ui/table-responsive'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
@@ -18,8 +17,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft, Plus, Trash2, User, CreditCard, Phone, Mail, Building2, Calendar, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { formatDate, formatDateShort, formatCurrency, cn } from '@/lib/utils'
 import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
+import { ElevatorQRValidationDialog } from '@/components/maintenance/ElevatorQRValidationDialog'
 import { inspectionService } from '@/services/inspection.service'
 import { faultService } from '@/services/fault.service'
+import { ElevatorQRCode } from '@/components/elevator/ElevatorQRCode'
 
 export function ElevatorDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -29,6 +30,9 @@ export function ElevatorDetailPage() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [maintenanceToDelete, setMaintenanceToDelete] = useState<number | null>(null)
   const [isMaintenanceDialogOpen, setIsMaintenanceDialogOpen] = useState(false)
+  const [isQRValidationDialogOpen, setIsQRValidationDialogOpen] = useState(false)
+  const [isMaintenanceFormDialogOpen, setIsMaintenanceFormDialogOpen] = useState(false)
+  const [validatedQRSessionToken, setValidatedQRSessionToken] = useState<string | null>(null)
 
   const { data: elevator, isLoading } = useQuery({
     queryKey: ['elevator', id],
@@ -313,6 +317,12 @@ export function ElevatorDetailPage() {
           </CardContent>
         </Card>
 
+        {/* QR Code Card */}
+        <ElevatorQRCode 
+          elevatorId={elevator.id}
+          elevatorName={`${elevator.bina} - ${elevator.kimlikNo}`}
+        />
+
         {(elevator.currentAccountId || elevator.currentAccountName) && (
           <Card>
             <CardHeader>
@@ -357,22 +367,76 @@ export function ElevatorDetailPage() {
             <CardTitle>Bakım Geçmişi</CardTitle>
             <CardDescription>Bu asansörün bakım kayıtları</CardDescription>
           </div>
-          <Dialog open={isMaintenanceDialogOpen} onOpenChange={setIsMaintenanceDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => setIsMaintenanceDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Yeni Bakım Ekle
-              </Button>
-            </DialogTrigger>
-            <MaintenanceFormDialog
-              elevatorId={Number(id)}
-              elevatorName={`${elevator.kimlikNo} - ${elevator.bina}`}
-              onClose={() => setIsMaintenanceDialogOpen(false)}
-              onSuccess={() => {
-                setIsMaintenanceDialogOpen(false)
-                queryClient.invalidateQueries({ queryKey: ['maintenances', 'elevator', id] })
-              }}
-            />
+          {/* TODO: Sadık geçici olarak bakım ekleme butonlarını kapattı (QR flow revize ediliyor) */}
+          {/* "Yeni Bakım Ekle" Button - Opens QR modal ONLY */}
+          {/* <Button onClick={() => {
+            // Clear any previous state
+            setValidatedQRSessionToken(null)
+            setIsMaintenanceFormDialogOpen(false) // Ensure maintenance modal is closed
+            // Open QR modal ONLY
+            setIsQRValidationDialogOpen(true)
+          }}>
+            <Plus className="mr-2 h-4 w-4" />
+            Yeni Bakım Ekle
+          </Button> */}
+
+          {/* QR Validation Dialog - Opens first */}
+          <ElevatorQRValidationDialog
+            open={isQRValidationDialogOpen}
+            onOpenChange={(open) => {
+              setIsQRValidationDialogOpen(open)
+              if (!open) {
+                // QR modal is closing
+                // DO NOT clear token here - onValidationSuccess handles success case
+                // Token will be cleared when maintenance modal closes or new flow starts
+                // DO NOT open maintenance modal here
+              }
+            }}
+            elevatorId={Number(id)}
+            elevatorCode={elevator.kimlikNo}
+            onValidationSuccess={(qrSessionToken) => {
+              // QR validation succeeded (for both technician QR and admin remote start)
+              // IMPORTANT: Set token FIRST, then close QR modal, then open maintenance modal
+              setValidatedQRSessionToken(qrSessionToken)
+              setIsQRValidationDialogOpen(false)
+              // Open maintenance modal ONLY after token is set
+              setIsMaintenanceFormDialogOpen(true)
+            }}
+          />
+
+          {/* Maintenance Form Dialog - Opens ONLY after QR validation success OR admin remote start */}
+          <Dialog open={isMaintenanceFormDialogOpen} onOpenChange={(open) => {
+            setIsMaintenanceFormDialogOpen(open)
+            if (!open) {
+              setValidatedQRSessionToken(null)
+            }
+          }}>
+            {validatedQRSessionToken && (
+              <MaintenanceFormDialog
+                elevatorId={Number(id)}
+                elevatorName={`${elevator.kimlikNo} - ${elevator.bina}`}
+                qrSessionToken={validatedQRSessionToken}
+                onClose={() => {
+                  setIsMaintenanceFormDialogOpen(false)
+                  setValidatedQRSessionToken(null)
+                }}
+                onSuccess={() => {
+                  setIsMaintenanceFormDialogOpen(false)
+                  setValidatedQRSessionToken(null)
+                  
+                  // Invalidate elevator-specific maintenance queries
+                  queryClient.invalidateQueries({ queryKey: ['maintenances', 'elevator', id] })
+                  
+                  // Invalidate all maintenance-related queries to refresh lists
+                  queryClient.invalidateQueries({ queryKey: ['maintenances'] })
+                  queryClient.invalidateQueries({ queryKey: ['maintenances', 'all'] })
+                  queryClient.invalidateQueries({ queryKey: ['maintenances', 'summary'] })
+                  
+                  // Refetch maintenance list immediately
+                  queryClient.refetchQueries({ queryKey: ['maintenances'] })
+                }}
+              />
+            )}
           </Dialog>
         </CardHeader>
         <CardContent>

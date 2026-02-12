@@ -24,10 +24,17 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { formatDateForAPI } from '@/lib/date-utils'
+import { useAuth } from '@/contexts/AuthContext'
+import { ElevatorQRValidationDialog } from '@/components/maintenance/ElevatorQRValidationDialog'
+import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
+import { qrSessionService } from '@/services/qr-session.service'
 
 export function MaintenancePlanningPage() {
   const { toast } = useToast()
+  const { hasRole } = useAuth()
   const queryClient = useQueryClient()
+  const isAdmin = hasRole('PATRON') // PATRON = ADMIN in this system
+  
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedBuilding, setSelectedBuilding] = useState<string>('all')
   const [selectedElevators, setSelectedElevators] = useState<Set<number>>(new Set())
@@ -36,6 +43,11 @@ export function MaintenancePlanningPage() {
   const [qrDialogOpen, setQrDialogOpen] = useState(false)
   const [selectedPlanForQR, setSelectedPlanForQR] = useState<MaintenancePlan | null>(null)
   const [qrCode, setQrCode] = useState('')
+  
+  // New QR validation and maintenance form states
+  const [isQRValidationDialogOpen, setIsQRValidationDialogOpen] = useState(false)
+  const [isMaintenanceFormDialogOpen, setIsMaintenanceFormDialogOpen] = useState(false)
+  const [validatedQRSessionToken, setValidatedQRSessionToken] = useState<string | null>(null)
   
   // Edit modal states
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -597,8 +609,11 @@ export function MaintenancePlanningPage() {
 
   const handleCompleteWithQR = (plan: MaintenancePlan) => {
     setSelectedPlanForQR(plan)
-    setQrCode('')
-    setQrDialogOpen(true)
+    // Clear any previous state
+    setValidatedQRSessionToken(null)
+    setIsMaintenanceFormDialogOpen(false)
+    // Open QR validation dialog (new flow)
+    setIsQRValidationDialogOpen(true)
   }
 
   const handleQRSubmit = () => {
@@ -1733,6 +1748,83 @@ export function MaintenancePlanningPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* QR Validation Dialog (new flow) */}
+      {selectedPlanForQR && (
+        <ElevatorQRValidationDialog
+          open={isQRValidationDialogOpen}
+          onOpenChange={(open) => {
+            setIsQRValidationDialogOpen(open)
+            if (!open) {
+              // QR modal is closing
+              // DO NOT clear token here - onValidationSuccess handles success case
+              // DO NOT open maintenance modal here
+            }
+          }}
+          elevatorId={selectedPlanForQR.elevatorId}
+          elevatorCode={selectedPlanForQR.elevatorCode || selectedPlanForQR.elevatorName || ''}
+          onValidationSuccess={(qrSessionToken) => {
+            // QR validation succeeded (for both technician QR and admin remote start)
+            // Set token FIRST, then close QR modal, then open maintenance modal
+            setValidatedQRSessionToken(qrSessionToken)
+            setIsQRValidationDialogOpen(false)
+            // Open maintenance modal ONLY after token is set
+            setIsMaintenanceFormDialogOpen(true)
+          }}
+        />
+      )}
+
+      {/* Maintenance Form Dialog (for QR validation flow) */}
+      {selectedPlanForQR && (
+        <Dialog open={isMaintenanceFormDialogOpen} onOpenChange={(open) => {
+          if (!open) {
+            setIsMaintenanceFormDialogOpen(false)
+            setValidatedQRSessionToken(null)
+            setSelectedPlanForQR(null)
+          }
+        }}>
+          <MaintenanceFormDialog
+            elevatorId={selectedPlanForQR.elevatorId}
+            elevatorName={(() => {
+              const elevator = elevators.find((e) => e.id === selectedPlanForQR.elevatorId)
+              const planInfo = formatMaintenancePlanElevator(
+                selectedPlanForQR,
+                elevator,
+                maintenanceTemplates.find((t) => t.id === selectedTemplateId)?.name
+              )
+              return planInfo.title
+            })()}
+            qrSessionToken={validatedQRSessionToken || undefined}
+            onClose={() => {
+              setIsMaintenanceFormDialogOpen(false)
+              setValidatedQRSessionToken(null)
+              setSelectedPlanForQR(null)
+            }}
+            onSuccess={() => {
+              // Invalidate maintenance plans (for status updates)
+              queryClient.invalidateQueries({ queryKey: ['maintenance-plans'] })
+              const year = currentMonth.getFullYear()
+              const month = currentMonth.getMonth()
+              queryClient.refetchQueries({ 
+                queryKey: ['maintenance-plans', year, month],
+                exact: true
+              })
+              
+              // Invalidate all maintenance-related queries to refresh lists
+              queryClient.invalidateQueries({ queryKey: ['maintenances'] })
+              queryClient.invalidateQueries({ queryKey: ['maintenances', 'all'] })
+              queryClient.invalidateQueries({ queryKey: ['maintenances', 'summary'] })
+              
+              // Refetch maintenance list immediately
+              queryClient.refetchQueries({ queryKey: ['maintenances'] })
+              
+              setIsMaintenanceFormDialogOpen(false)
+              setValidatedQRSessionToken(null)
+              setSelectedPlanForQR(null)
+            }}
+          />
+        </Dialog>
+      )}
 
     </div>
   )

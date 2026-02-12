@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Calendar, QrCode, CheckCircle2, Clock, X, Edit, Eye, Play, FileText, Search, Filter } from 'lucide-react'
+import { Calendar, QrCode, CheckCircle2, Clock, X, Edit, Eye, Play, FileText, Search, Filter, Camera, Smartphone, Monitor, Loader2 } from 'lucide-react'
 import { maintenancePlanService, type MaintenancePlan } from '@/services/maintenance-plan.service'
 import { maintenanceExecutionService } from '@/services/maintenance-execution.service'
 import { elevatorService } from '@/services/elevator.service'
+import { qrSessionService } from '@/services/qr-session.service'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -18,18 +20,26 @@ import { formatDateForAPI } from '@/lib/date-utils'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
 
 type StatusFilter = 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'ALL'
 
 export function MaintenancePage() {
   const { toast } = useToast()
+  const { user, hasRole } = useAuth()
   const queryClient = useQueryClient()
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('ALL')
   const [selectedPlan, setSelectedPlan] = useState<MaintenancePlan | null>(null)
   
+  // Check if user is ADMIN
+  const isAdmin = hasRole('PATRON') // PATRON = ADMIN in this system
+  
   // Modal states
   const [qrDialogOpen, setQrDialogOpen] = useState(false)
   const [qrCode, setQrCode] = useState('')
+  const [isValidatingQR, setIsValidatingQR] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState('')
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false)
@@ -38,12 +48,29 @@ export function MaintenancePage() {
   const [completePhotos, setCompletePhotos] = useState<File[]>([])
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
   const [planToCancel, setPlanToCancel] = useState<MaintenancePlan | null>(null)
+  // Maintenance form dialog state (for remote start flow)
+  const [maintenanceFormDialogOpen, setMaintenanceFormDialogOpen] = useState(false)
+  const [validatedQRSessionToken, setValidatedQRSessionToken] = useState<string | null>(null)
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedElevatorId, setSelectedElevatorId] = useState<number | null>(null)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera
+      const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase())
+      const isSmallScreen = window.innerWidth < 768
+      setIsMobile(isMobileDevice || isSmallScreen)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Fetch elevators for display
   const { data: elevators = [] } = useQuery({
@@ -130,22 +157,18 @@ export function MaintenancePage() {
     })
   }, [allPlans, filteredPlans, selectedStatus])
 
-  // Start maintenance mutation (with QR)
+  // Start maintenance mutation (with QR session token)
   const startMaintenanceMutation = useMutation({
-    mutationFn: async ({ planId, qrCode }: { planId: number; qrCode: string }) => {
-      console.log('🔍 START MAINTENANCE - Plan ID:', planId, 'QR Code:', qrCode)
+    mutationFn: async ({ planId, qrSessionToken }: { planId: number; qrSessionToken: string }) => {
+      console.log('🔍 START MAINTENANCE - Plan ID:', planId, 'QR Session Token:', qrSessionToken)
       
-      // First validate QR code
-      const validation = await maintenanceExecutionService.validateQRToken(qrCode)
-      console.log('📥 QR VALIDATION RESULT:', validation)
-      
-      if (!validation.valid || validation.taskId !== planId) {
-        throw new Error(validation.error || 'Geçersiz QR kodu')
-      }
-      
-      // Then start execution - this will change plan status to IN_PROGRESS
-      console.log('🚀 STARTING EXECUTION - Task ID:', planId)
-      const execution = await maintenanceExecutionService.start({ taskId: planId })
+      // Start execution with QR session token
+      // Backend will validate the token
+      const execution = await maintenanceExecutionService.start({ 
+        maintenancePlanId: planId,
+        qrToken: qrSessionToken,
+        remoteStart: false
+      })
       console.log('📥 EXECUTION STARTED:', execution)
       
       return execution
@@ -157,8 +180,8 @@ export function MaintenancePage() {
       
       // Close QR modal and open Complete modal
       setQrDialogOpen(false)
+      setQrCode('')
       setCompleteDialogOpen(true)
-      // Keep qrCode and selectedPlan for Complete modal
       
       toast({
         title: 'Başarılı',
@@ -170,6 +193,42 @@ export function MaintenancePage() {
       toast({
         title: 'Hata',
         description: error.message || 'Bakım başlatılamadı',
+        variant: 'destructive',
+      })
+    },
+  })
+
+  // Remote start mutation (ADMIN only)
+  const remoteStartMutation = useMutation({
+    mutationFn: async ({ planId }: { planId: number }) => {
+      if (!selectedPlan) throw new Error('Plan seçilmedi')
+      
+      // Get remote start session token
+      const response = await qrSessionService.remoteStart({
+        elevatorId: selectedPlan.elevatorId,
+      })
+      
+      // Return session token (don't call start endpoint here - MaintenanceFormDialog will handle it)
+      return response.qrSessionToken
+    },
+    onSuccess: async (qrSessionToken: string) => {
+      // Close QR dialog
+      setQrDialogOpen(false)
+      setQrCode('')
+      
+      // Set session token and open maintenance form dialog
+      setValidatedQRSessionToken(qrSessionToken)
+      setMaintenanceFormDialogOpen(true)
+      
+      toast({
+        title: 'Başarılı',
+        description: 'Bakım uzaktan başlatıldı. Şimdi bakım bilgilerini doldurun.',
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Hata',
+        description: error.response?.data?.message || error.message || 'Uzaktan başlatma başarısız',
         variant: 'destructive',
       })
     },
@@ -255,7 +314,9 @@ export function MaintenancePage() {
   const handleStart = (plan: MaintenancePlan) => {
     setSelectedPlan(plan)
     setQrCode('')
+    setIsValidatingQR(false)
     setQrDialogOpen(true)
+    // DO NOT open any other modal
   }
 
   const handleReschedule = (plan: MaintenancePlan) => {
@@ -282,21 +343,64 @@ export function MaintenancePage() {
     setCompleteDialogOpen(true)
   }
 
-  const handleQRSubmit = () => {
+  // Handle QR validation and start maintenance
+  const handleQRSubmit = async () => {
     if (!selectedPlan || !qrCode.trim()) {
       toast({
         title: 'Hata',
-        description: 'Lütfen QR kodunu girin',
+        description: 'Lütfen QR kodunu girin veya tarayın',
         variant: 'destructive',
       })
       return
     }
 
-    if (completeDialogOpen) {
-      completeMutation.mutate({ id: selectedPlan.id, qrCode: qrCode.trim() })
-    } else {
-      startMaintenanceMutation.mutate({ planId: selectedPlan.id, qrCode: qrCode.trim() })
+    setIsValidatingQR(true)
+
+    try {
+      // Validate QR and get session token
+      const response = await qrSessionService.validate({
+        qrCode: qrCode.trim(),
+        elevatorId: selectedPlan.elevatorId,
+      })
+
+      // Verify elevator match
+      if (response.elevatorId !== selectedPlan.elevatorId) {
+        toast({
+          title: 'Hata',
+          description: 'QR kodu bu asansör için geçerli değil',
+          variant: 'destructive',
+        })
+        setIsValidatingQR(false)
+        return
+      }
+
+      // QR validated successfully - close QR modal and start maintenance
+      setQrDialogOpen(false)
+      setQrCode('')
+      
+      // Start maintenance with session token
+      startMaintenanceMutation.mutate({
+        planId: selectedPlan.id,
+        qrSessionToken: response.qrSessionToken,
+      })
+
+    } catch (error: any) {
+      console.error('QR validation error:', error)
+      toast({
+        title: 'Hata',
+        description: error.response?.data?.message || 'QR kodu doğrulanamadı',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsValidatingQR(false)
     }
+  }
+
+  // Handle remote start (ADMIN only)
+  const handleRemoteStart = () => {
+    if (!selectedPlan) return
+    
+    remoteStartMutation.mutate({ planId: selectedPlan.id })
   }
 
   const handleRescheduleSubmit = () => {
@@ -717,22 +821,30 @@ export function MaintenancePage() {
       </div>
 
       {/* QR Scanner Modal (for Start) */}
-      <Dialog open={qrDialogOpen && !completeDialogOpen} onOpenChange={(open) => {
+      <Dialog open={qrDialogOpen && !completeDialogOpen && !maintenanceFormDialogOpen} onOpenChange={(open) => {
         if (!open) {
+          // QR modal cancelled - close it, do NOT open any other modal
           setQrDialogOpen(false)
           setQrCode('')
           setSelectedPlan(null)
+          setIsValidatingQR(false)
         }
       }}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>QR Kod ile Bakım Başlat</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5" />
+              QR Kod ile Bakım Başlat
+            </DialogTitle>
             <DialogDescription>
-              Bakımı başlatmak için QR kodunu girin veya tarayın
+              {isAdmin 
+                ? 'QR kodunu tarayın veya uzaktan başlatın'
+                : 'Bakımı başlatmak için QR kodunu tarayın'}
             </DialogDescription>
           </DialogHeader>
           {selectedPlan && (
-            <div className="space-y-6">
+            <div className="space-y-4 py-4">
+              {/* Plan Info Card */}
               <div className="p-4 bg-[#F9FAFB] rounded-[8px] border border-[#E5E7EB]">
                 {(() => {
                   const elevator = elevators.find((e) => e.id === selectedPlan.elevatorId)
@@ -763,39 +875,129 @@ export function MaintenancePage() {
                   )
                 })()}
               </div>
+
+              {/* QR Code Input */}
               <div className="space-y-2">
                 <Label htmlFor="qrCode">QR Kod</Label>
-                <Input
-                  id="qrCode"
-                  placeholder="QR kodunu girin veya tarayın"
-                  value={qrCode}
-                  onChange={(e) => setQrCode(e.target.value)}
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleQRSubmit()
-                    }
-                  }}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="qrCode"
+                    placeholder="QR kodunu girin veya tarayın"
+                    value={qrCode}
+                    onChange={(e) => setQrCode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && qrCode.trim()) {
+                        handleQRSubmit()
+                      }
+                    }}
+                    className="flex-1"
+                    autoFocus
+                    disabled={isValidatingQR}
+                  />
+                  {isMobile && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => cameraInputRef.current?.click()}
+                      title="Kamerayı aç"
+                      disabled={isValidatingQR}
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                
+                {/* Hidden camera input for mobile */}
+                {isMobile && (
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => {
+                      // Camera capture - QR scanning would be handled by a library
+                      toast({
+                        title: 'Bilgi',
+                        description: 'Kamera açıldı. QR kodu tarayın veya manuel girin.',
+                      })
+                    }}
+                    className="hidden"
+                  />
+                )}
               </div>
+
+              {/* Device Info */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {isMobile ? (
+                  <>
+                    <Smartphone className="h-4 w-4" />
+                    <span>Mobil cihaz: Kamerayı kullanabilirsiniz</span>
+                  </>
+                ) : (
+                  <>
+                    <Monitor className="h-4 w-4" />
+                    <span>Masaüstü: QR kodunu manuel girin</span>
+                  </>
+                )}
+              </div>
+
+              {/* Admin Remote Start Button */}
+              {isAdmin && (
+                <div className="pt-2 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleRemoteStart}
+                    className="w-full"
+                    disabled={remoteStartMutation.isPending || isValidatingQR}
+                  >
+                    {remoteStartMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Başlatılıyor...
+                      </>
+                    ) : (
+                      <>
+                        <Monitor className="h-4 w-4 mr-2" />
+                        Uzaktan Başlat (QR Gerekmez)
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-1 text-center">
+                    Admin olarak QR kodu olmadan başlatabilirsiniz
+                  </p>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
+                // Cancel - close QR modal, do NOT open any other modal
                 setQrDialogOpen(false)
                 setQrCode('')
                 setSelectedPlan(null)
+                setIsValidatingQR(false)
               }}
+              disabled={isValidatingQR || startMaintenanceMutation.isPending || remoteStartMutation.isPending}
             >
               İptal
             </Button>
             <Button
               onClick={handleQRSubmit}
-              disabled={!qrCode.trim() || startMaintenanceMutation.isPending}
+              disabled={!qrCode.trim() || isValidatingQR || startMaintenanceMutation.isPending}
+              className="bg-gradient-to-r from-indigo-500 to-indigo-600"
             >
-              {startMaintenanceMutation.isPending ? 'Başlatılıyor...' : 'Başlat'}
+              {isValidatingQR ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Doğrulanıyor...
+                </>
+              ) : (
+                'Doğrula ve Başlat'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1020,6 +1222,55 @@ export function MaintenancePage() {
         onConfirm={handleCancelConfirm}
         variant="destructive"
       />
+
+      {/* Maintenance Form Dialog (for remote start flow) */}
+      {selectedPlan && (
+        <Dialog open={maintenanceFormDialogOpen} onOpenChange={(open) => {
+          if (!open) {
+            setMaintenanceFormDialogOpen(false)
+            setValidatedQRSessionToken(null)
+            setSelectedPlan(null)
+          }
+        }}>
+          <MaintenanceFormDialog
+            elevatorId={selectedPlan.elevatorId}
+            elevatorName={(() => {
+              const elevator = elevators.find((e) => e.id === selectedPlan.elevatorId)
+              const displayInfo = formatElevatorDisplayName(
+                elevator || {
+                  kimlikNo: selectedPlan.elevatorCode || selectedPlan.elevatorName,
+                  bina: selectedPlan.buildingName,
+                  adres: undefined,
+                }
+              )
+              return displayInfo.fullName
+            })()}
+            qrSessionToken={validatedQRSessionToken || undefined}
+            onClose={() => {
+              setMaintenanceFormDialogOpen(false)
+              setValidatedQRSessionToken(null)
+              setSelectedPlan(null)
+            }}
+            onSuccess={() => {
+              // Invalidate maintenance plans (for status updates)
+              queryClient.invalidateQueries({ queryKey: ['maintenance-plans'] })
+              queryClient.refetchQueries({ queryKey: ['maintenance-plans', 'all'] })
+              
+              // Invalidate all maintenance-related queries to refresh lists
+              queryClient.invalidateQueries({ queryKey: ['maintenances'] })
+              queryClient.invalidateQueries({ queryKey: ['maintenances', 'all'] })
+              queryClient.invalidateQueries({ queryKey: ['maintenances', 'summary'] })
+              
+              // Refetch maintenance list immediately
+              queryClient.refetchQueries({ queryKey: ['maintenances'] })
+              
+              setMaintenanceFormDialogOpen(false)
+              setValidatedQRSessionToken(null)
+              setSelectedPlan(null)
+            }}
+          />
+        </Dialog>
+      )}
     </div>
   )
 }

@@ -14,6 +14,8 @@ export interface MaintenancePlan {
   completedDate?: string
   qrCode?: string
   note?: string // Backend'den gelen not
+  templateId?: number // Backend'den gelen template ID
+  technicianId?: number // Backend'den gelen technician ID (assignedTechnicianId)
   createdAt: string
   updatedAt: string
 }
@@ -29,9 +31,9 @@ export interface CreateMaintenancePlanRequest {
 export interface UpdateMaintenancePlanRequest {
   plannedDate?: string // Backend expects "plannedDate", not "scheduledDate"
   status?: 'PLANNED' | 'COMPLETED' | 'CANCELLED'
-  templateId?: number // Optional - update template
-  technicianId?: number // Backend expects "technicianId", not "assignedTechnicianId"
-  note?: string // Optional - update note
+  templateId?: number | null // Optional - update template (null means keep existing)
+  technicianId?: number | null // Backend expects "technicianId", not "assignedTechnicianId" (null means keep existing)
+  note?: string | null // Optional - update note (null means keep existing, empty string means clear)
 }
 
 export interface RescheduleMaintenancePlanRequest {
@@ -51,6 +53,9 @@ function mapPlanFromBackend(backend: any): MaintenancePlan {
     completedDate: backend.completedDate || backend.completed_date,
     qrCode: backend.qrCode || backend.qr_code,
     note: backend.note || undefined,
+    // Map templateId and technicianId from backend
+    templateId: backend.templateId || backend.template_id || undefined,
+    technicianId: backend.technicianId || backend.technician_id || backend.assignedTechnicianId || backend.assigned_technician_id || undefined,
     createdAt: backend.createdAt || backend.created_at,
     updatedAt: backend.updatedAt || backend.updated_at,
   }
@@ -169,29 +174,39 @@ export const maintenancePlanService = {
   },
 
   update: async (id: number, plan: UpdateMaintenancePlanRequest): Promise<MaintenancePlan> => {
+    // Build payload - only include defined fields (not null/undefined)
     const payload: any = {}
     
     // Backend expects "plannedDate", not "scheduledDate"
-    if (plan.plannedDate) {
+    if (plan.plannedDate !== undefined && plan.plannedDate !== null) {
       payload.plannedDate = formatDateForAPI(plan.plannedDate)
     }
     
-    if (plan.status) {
+    if (plan.status !== undefined && plan.status !== null) {
       payload.status = plan.status
     }
     
-    if (plan.templateId) {
+    // TemplateId: include if provided (even if 0, but not if undefined/null)
+    if (plan.templateId !== undefined && plan.templateId !== null) {
       payload.templateId = Number(plan.templateId)
     }
     
+    // TechnicianId: include if provided (even if 0, but not if undefined/null)
     // Backend expects "technicianId", not "assignedTechnicianId"
-    if (plan.technicianId) {
+    if (plan.technicianId !== undefined && plan.technicianId !== null) {
       payload.technicianId = Number(plan.technicianId)
     }
     
+    // Note: include if provided (even if empty string, but not if undefined)
     if (plan.note !== undefined) {
       payload.note = plan.note
     }
+    
+    // Debug: Log final payload before sending
+    console.log('🔍 UPDATE MAINTENANCE PLAN - ID:', id)
+    console.log('📤 UPDATE PAYLOAD (final):', JSON.stringify(payload, null, 2))
+    console.log('📤 UPDATE PAYLOAD (object):', payload)
+    console.log('📤 UPDATE PAYLOAD keys:', Object.keys(payload))
     
     const { data } = await apiClient.put<ApiResponse<any>>(API_ENDPOINTS.MAINTENANCE_PLANS.BY_ID(id), payload)
     const unwrapped = unwrapResponse(data)

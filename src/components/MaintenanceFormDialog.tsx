@@ -18,6 +18,7 @@ import { X } from 'lucide-react'
 interface MaintenanceFormDialogProps {
   elevatorId: number
   elevatorName?: string // Optional, for display only
+  qrSessionToken?: string // QR session token from validation (required for TECHNICIAN, optional for ADMIN)
   onClose?: () => void
   onSuccess: () => void
 }
@@ -33,10 +34,12 @@ const getInitialFormState = () => ({
 export function MaintenanceFormDialog({
   elevatorId,
   elevatorName,
+  qrSessionToken,
   onClose,
   onSuccess,
 }: MaintenanceFormDialogProps) {
-  const { user } = useAuth()
+  const { user, hasRole } = useAuth()
+  const isAdmin = hasRole('PATRON') // PATRON = ADMIN
   const [formData, setFormData] = useState(getInitialFormState())
   const [photoError, setPhotoError] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -68,6 +71,11 @@ export function MaintenanceFormDialog({
 
   const createMutation = useMutation({
     mutationFn: (data: typeof formData) => {
+      // Validate QR session token for TECHNICIAN
+      if (!isAdmin && !qrSessionToken) {
+        throw new Error('QR session token is required for maintenance creation')
+      }
+
       return maintenanceService.create({
         elevatorId: elevatorId,
         tarih: data.tarih,
@@ -76,11 +84,24 @@ export function MaintenanceFormDialog({
         ucret: data.ucret,
         teknisyenUserId: user?.id ? user.id : undefined, // Auto-filled from logged-in user
         photos: data.photos.length > 0 ? data.photos : undefined,
+        qrSessionToken: qrSessionToken, // Pass session token to backend
       })
     },
     onSuccess: () => {
+      // Invalidate all maintenance-related queries to refresh lists
       queryClient.invalidateQueries({ queryKey: ['maintenances'] })
+      queryClient.invalidateQueries({ queryKey: ['maintenances', 'all'] })
+      queryClient.invalidateQueries({ queryKey: ['maintenances', 'summary'] })
+      
+      // Invalidate elevator-specific maintenance queries
+      queryClient.invalidateQueries({ queryKey: ['maintenances', 'elevator', elevatorId] })
+      
+      // Invalidate elevators to refresh any maintenance counts
       queryClient.invalidateQueries({ queryKey: ['elevators'] })
+      
+      // Refetch maintenance list immediately
+      queryClient.refetchQueries({ queryKey: ['maintenances'] })
+      
       toast({
         title: 'Başarılı',
         description: 'Bakım kaydı başarıyla eklendi.',

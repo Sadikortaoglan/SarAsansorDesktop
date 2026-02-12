@@ -52,7 +52,9 @@ export interface MaintenanceExecution {
 }
 
 export interface StartExecutionRequest {
-  taskId: number
+  maintenancePlanId: number
+  qrToken?: string
+  remoteStart?: boolean
 }
 
 export interface UpdateStepExecutionRequest {
@@ -181,7 +183,11 @@ export const maintenanceExecutionService = {
   },
 
   start: async (request: StartExecutionRequest): Promise<MaintenanceExecution> => {
-    const { data } = await apiClient.post<ApiResponse<any>>('/maintenance-executions/start', request)
+    const { data } = await apiClient.post<ApiResponse<any>>('/maintenance/start', {
+      maintenancePlanId: request.maintenancePlanId,
+      qrToken: request.qrToken,
+      remoteStart: request.remoteStart || false,
+    })
     const unwrapped = unwrapResponse(data)
     return mapExecutionFromBackend(unwrapped)
   },
