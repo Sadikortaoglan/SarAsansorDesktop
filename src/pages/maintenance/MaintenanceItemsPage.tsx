@@ -44,11 +44,9 @@ export function MaintenanceItemsPage() {
   const [selectedItemForEdit, setSelectedItemForEdit] = useState<MaintenanceItem | null>(null)
   const [itemToDelete, setItemToDelete] = useState<{ type: 'section' | 'subSection' | 'item'; id: number } | null>(null)
   
-  // Sub-Section modal states
-  const [subSectionDialogOpen, setSubSectionDialogOpen] = useState(false)
+  // Sub-Section modal states (only for edit, not create)
   const [editSubSectionDialogOpen, setEditSubSectionDialogOpen] = useState(false)
   const [subSectionName, setSubSectionName] = useState('')
-  const [selectedSectionForSubSection, setSelectedSectionForSubSection] = useState<number | null>(null)
   const [selectedSubSectionForEdit, setSelectedSubSectionForEdit] = useState<MaintenanceSubSection | null>(null)
   
   // Template modal states
@@ -76,7 +74,10 @@ export function MaintenanceItemsPage() {
   const createSectionMutation = useMutation({
     mutationFn: (name: string) => {
       if (!selectedTemplate) throw new Error('Template seçilmedi')
-      return maintenanceTemplateService.createSection(selectedTemplate, { name })
+      return maintenanceTemplateService.createSection(selectedTemplate, { 
+        templateId: selectedTemplate,
+        name 
+      })
     },
     onMutate: async (name) => {
       await queryClient.cancelQueries({ queryKey: ['maintenance-template', selectedTemplate] })
@@ -213,9 +214,25 @@ export function MaintenanceItemsPage() {
   const createItemMutation = useMutation({
     mutationFn: (request: { sectionId?: number; subSectionId?: number; title: string; required: boolean; photoRequired: boolean; note: string; active: boolean }) => {
       if (request.subSectionId) {
-        return maintenanceTemplateService.createItemInSubSection(request.subSectionId, request)
+        // Create in sub-section
+        return maintenanceTemplateService.createItemInSubSection(request.subSectionId, {
+          sectionId: request.subSectionId, // For type compatibility
+          title: request.title,
+          required: request.required,
+          photoRequired: request.photoRequired,
+          note: request.note,
+          active: request.active,
+        })
       } else if (request.sectionId) {
-        return maintenanceTemplateService.createItem(request.sectionId, request)
+        // Create in section
+        return maintenanceTemplateService.createItem(request.sectionId, {
+          sectionId: request.sectionId,
+          title: request.title,
+          required: request.required,
+          photoRequired: request.photoRequired,
+          note: request.note,
+          active: request.active,
+        })
       } else {
         throw new Error('Section ID veya Sub-Section ID gereklidir')
       }
@@ -430,31 +447,6 @@ export function MaintenanceItemsPage() {
       toast({
         title: 'Hata',
         description: error.response?.data?.message || 'Bakım şablonu güncellenemedi',
-        variant: 'destructive',
-      })
-    },
-  })
-
-  // Create Sub-Section Mutation
-  const createSubSectionMutation = useMutation({
-    mutationFn: ({ sectionId, name }: { sectionId: number; name: string }) => {
-      return maintenanceTemplateService.createSubSection(sectionId, { sectionId, name })
-    },
-    onSuccess: async () => {
-      await refetchTemplate()
-      setSubSectionDialogOpen(false)
-      setSubSectionName('')
-      setSelectedSectionForSubSection(null)
-      toast({
-        title: 'Başarılı',
-        description: 'Alt bölüm başarıyla eklendi',
-      })
-    },
-    onError: (error: any) => {
-      console.error('❌ CREATE SUB-SECTION ERROR:', error)
-      toast({
-        title: 'Hata',
-        description: error.response?.data?.message || 'Alt bölüm eklenemedi',
         variant: 'destructive',
       })
     },
@@ -737,12 +729,6 @@ export function MaintenanceItemsPage() {
   }
 
   // Sub-Section handlers
-  const handleAddSubSection = (sectionId: number) => {
-    setSelectedSectionForSubSection(sectionId)
-    setSubSectionName('')
-    setSubSectionDialogOpen(true)
-  }
-
   const handleEditSubSection = (subSection: MaintenanceSubSection) => {
     setSelectedSubSectionForEdit(subSection)
     setSubSectionName(subSection.name)
@@ -752,21 +738,6 @@ export function MaintenanceItemsPage() {
   const handleDeleteSubSection = (subSection: MaintenanceSubSection) => {
     setItemToDelete({ type: 'subSection', id: subSection.id })
     setDeleteConfirmOpen(true)
-  }
-
-  const handleSubSectionSubmit = () => {
-    if (!subSectionName.trim() || !selectedSectionForSubSection) {
-      toast({
-        title: 'Hata',
-        description: 'Alt bölüm adı gereklidir',
-        variant: 'destructive',
-      })
-      return
-    }
-    createSubSectionMutation.mutate({
-      sectionId: selectedSectionForSubSection,
-      name: subSectionName.trim(),
-    })
   }
 
   const handleSubSectionUpdate = () => {
@@ -880,20 +851,12 @@ export function MaintenanceItemsPage() {
                 </CardHeader>
                 {expandedSections.has(section.id) && (
                   <CardContent>
-                    <div className="mb-4 flex justify-between items-center">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleAddSubSection(section.id)}
-                        className="bg-blue-50 hover:bg-blue-100"
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Alt Bölüm Ekle
-                      </Button>
+                    <div className="mb-4 flex justify-end items-center">
                       <Button 
                         variant="outline" 
                         size="sm"
                         onClick={() => handleAddItem(section.id)}
+                        className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white hover:from-indigo-600 hover:to-indigo-700"
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Madde Ekle
@@ -1370,49 +1333,6 @@ export function MaintenanceItemsPage() {
                 disabled={!itemTitle.trim() || updateItemMutation.isPending}
               >
                 {updateItemMutation.isPending ? 'Güncelleniyor...' : 'Kaydet'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Add Sub-Section Dialog */}
-        <Dialog open={subSectionDialogOpen} onOpenChange={setSubSectionDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Alt Bölüm Ekle</DialogTitle>
-              <DialogDescription>
-                Yeni bir alt bölüm ekleyin
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="subSectionName">Alt Bölüm Adı *</Label>
-                <Input
-                  id="subSectionName"
-                  value={subSectionName}
-                  onChange={(e) => setSubSectionName(e.target.value)}
-                  placeholder="Örn: Motor Kontrolü"
-                  autoFocus
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSubSectionDialogOpen(false)
-                  setSubSectionName('')
-                  setSelectedSectionForSubSection(null)
-                }}
-              >
-                İptal
-              </Button>
-              <Button
-                onClick={handleSubSectionSubmit}
-                disabled={!subSectionName.trim() || createSubSectionMutation.isPending}
-                className="bg-gradient-to-r from-indigo-500 to-indigo-600"
-              >
-                {createSubSectionMutation.isPending ? 'Ekleniyor...' : 'Ekle'}
               </Button>
             </DialogFooter>
           </DialogContent>

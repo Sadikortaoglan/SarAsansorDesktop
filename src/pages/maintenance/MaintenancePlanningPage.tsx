@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Building2, CheckSquare, Square, Info, Calendar as CalendarIcon, CheckCircle2, QrCode, ChevronLeft, ChevronRight, Sparkles, MoreVertical, Edit, Calendar, X, Eye, Trash2 } from 'lucide-react'
+import { Search, Building2, CheckSquare, Square, Info, Calendar as CalendarIcon, CheckCircle2, QrCode, ChevronLeft, ChevronRight, Sparkles, MoreVertical, Edit, Calendar, Eye, Trash2, CheckCircle, Settings, FileText } from 'lucide-react'
 import { elevatorService } from '@/services/elevator.service'
-import { maintenancePlanService, type MaintenancePlan } from '@/services/maintenance-plan.service'
+import { maintenancePlanService, type MaintenancePlan, type UpdateMaintenancePlanRequest } from '@/services/maintenance-plan.service'
 import { userService } from '@/services/user.service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -154,21 +154,48 @@ export function MaintenancePlanningPage() {
 
   // Update plan mutation
   const updatePlanMutation = useMutation({
-    mutationFn: ({ id, plan }: { id: number; plan: { plannedDate?: string; templateId?: number; technicianId?: number; note?: string } }) => {
-      const updateData: any = {}
-      if (plan.plannedDate) {
-        updateData.plannedDate = formatDateForAPI(plan.plannedDate)
+    mutationFn: ({ id, plan, originalPlan }: { 
+      id: number
+      plan: { plannedDate?: string; templateId?: number | null; technicianId?: number | null; note?: string }
+      originalPlan: MaintenancePlan
+    }) => {
+      // Merge original plan with form state to ensure all fields are preserved
+      // Only update fields that are explicitly provided in form state
+      const updateData: UpdateMaintenancePlanRequest = {
+        // Always include plannedDate (required field)
+        plannedDate: plan.plannedDate || originalPlan.scheduledDate,
+        // Include templateId if provided, otherwise keep original
+        templateId: plan.templateId !== undefined && plan.templateId !== null 
+          ? plan.templateId 
+          : originalPlan.templateId,
+        // Include technicianId if provided, otherwise keep original
+        technicianId: plan.technicianId !== undefined && plan.technicianId !== null
+          ? plan.technicianId
+          : originalPlan.technicianId,
+        // Include note if provided, otherwise keep original
+        note: plan.note !== undefined
+          ? plan.note
+          : originalPlan.note,
       }
-      if (plan.templateId) {
-        updateData.templateId = plan.templateId
-      }
-      // Backend expects "technicianId", not "assignedTechnicianId"
-      if (plan.technicianId) {
-        updateData.technicianId = plan.technicianId
-      }
-      if (plan.note !== undefined) {
-        updateData.note = plan.note
-      }
+      
+      // Debug: Log before API call
+      console.log('🔍 UPDATE PLAN MUTATION - ID:', id)
+      console.log('📤 ORIGINAL PLAN:', {
+        id: originalPlan.id,
+        templateId: originalPlan.templateId,
+        technicianId: originalPlan.technicianId,
+        scheduledDate: originalPlan.scheduledDate,
+        note: originalPlan.note,
+      })
+      console.log('📤 FORM STATE:', {
+        plannedDate: plan.plannedDate,
+        templateId: plan.templateId,
+        technicianId: plan.technicianId,
+        note: plan.note,
+      })
+      console.log('📤 FINAL PAYLOAD (merged):', JSON.stringify(updateData, null, 2))
+      console.log('📤 FINAL PAYLOAD (object):', updateData)
+      
       return maintenancePlanService.update(id, updateData)
     },
     onSuccess: async () => {
@@ -250,28 +277,40 @@ export function MaintenancePlanningPage() {
   // Open edit dialog
   const openEditDialog = (plan: MaintenancePlan) => {
     setSelectedPlanForEdit(plan)
+    // Initialize form state from plan - use plan values, not defaults
     setEditPlannedDate(plan.scheduledDate)
-    // Use selected template or default to first template
-    setEditTemplateId(selectedTemplateId || maintenanceTemplates[0]?.id || null)
-    // Note: technicianId is not in MaintenancePlan interface
-    // We'll leave it null for now - backend may not return it
-    setEditTechnicianId(null)
+    // Use plan's templateId if available, otherwise fallback to selectedTemplateId or first template
+    setEditTemplateId(plan.templateId || selectedTemplateId || maintenanceTemplates[0]?.id || null)
+    // Use plan's technicianId if available (backend returns it)
+    setEditTechnicianId(plan.technicianId || null)
     // Backend'den gelen note'u set et
     setEditNote(plan.note || '')
     setEditDialogOpen(true)
+    
+    // Debug: Log plan data when opening edit dialog
+    console.log('🔍 OPEN EDIT DIALOG - Plan:', {
+      id: plan.id,
+      scheduledDate: plan.scheduledDate,
+      templateId: plan.templateId,
+      technicianId: plan.technicianId,
+      note: plan.note,
+      status: plan.status,
+    })
   }
 
   // Handle edit form submit
   const handleEditSubmit = () => {
     if (!selectedPlanForEdit) return
     
+    // Pass original plan to mutation for merging
     updatePlanMutation.mutate({
       id: selectedPlanForEdit.id,
+      originalPlan: selectedPlanForEdit, // Pass full original plan
       plan: {
         plannedDate: editPlannedDate,
-        templateId: editTemplateId || undefined,
-        technicianId: editTechnicianId || undefined, // Backend expects "technicianId"
-        note: editNote || undefined,
+        templateId: editTemplateId, // Can be null, will be handled in mutation
+        technicianId: editTechnicianId, // Can be null, will be handled in mutation
+        note: editNote, // Can be empty string, will be handled in mutation
       },
     })
   }
@@ -450,116 +489,110 @@ export function MaintenancePlanningPage() {
   }
 
   const handleDayClick = (date: Date) => {
+    // PLANNING MODE: If elevators are selected, always create new plan
+    if (selectedElevators.size > 0) {
+      // Validate template selection
+      if (!selectedTemplateId || selectedTemplateId <= 0) {
+        toast({
+          title: 'Uyarı',
+          description: 'Lütfen bakım şablonu seçin',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      // Validate date
+      if (isDateDisabled(date)) {
+        toast({
+          title: 'Uyarı',
+          description: 'Seçili asansörlerden biri bu ay için zaten planlanmış',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      const dateStr = date.toISOString().split('T')[0]
+
+      // Check for conflicts on this specific date
+      const conflicts: number[] = []
+      selectedElevators.forEach((elevatorId) => {
+        const hasConflict = existingPlans.some((plan) => {
+          if (plan.elevatorId !== elevatorId || plan.status === 'CANCELLED' || plan.status === 'NOT_PLANNED') return false
+          const planDate = new Date(plan.scheduledDate)
+          const planDateStr = planDate.toISOString().split('T')[0]
+          return planDateStr === dateStr
+        })
+        if (hasConflict) conflicts.push(elevatorId)
+      })
+
+      if (conflicts.length > 0) {
+        toast({
+          title: 'Çakışma',
+          description: `${conflicts.length} asansör bu tarihe zaten planlanmış`,
+          variant: 'destructive',
+        })
+        return
+      }
+
+      // Create plans for all selected elevators
+      const validElevatorIds = Array.from(selectedElevators).filter(
+        (id) => id != null && !isNaN(Number(id)) && id > 0
+      )
+
+      if (validElevatorIds.length === 0) {
+        toast({
+          title: 'Hata',
+          description: 'Geçerli asansör seçilmedi',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      // Create plans directly (no modal needed in planning mode)
+      const promises = validElevatorIds.map((elevatorId) => {
+        const planData = {
+          elevatorId: Number(elevatorId),
+          templateId: Number(selectedTemplateId),
+          plannedDate: dateStr,
+        }
+        return createPlanMutation.mutateAsync(planData)
+      })
+
+      Promise.all(promises)
+        .then(() => {
+          toast({
+            title: 'Başarılı',
+            description: `${validElevatorIds.length} bakım planı oluşturuldu`,
+          })
+        })
+        .catch((error) => {
+          console.error('Error creating plans:', error)
+        })
+
+      return
+    }
+
+    // VIEW MODE: No elevators selected - view existing plans
     const plans = getPlansForDate(date) // Already excludes CANCELLED
     
-    // If there are existing active plans, open plan list modal or edit modal
-    if (plans.length > 0) {
-      if (plans.length === 1) {
-        // Single plan - open edit modal
-        openEditDialog(plans[0])
-      } else {
-        // Multiple plans - open list modal
-        setSelectedDateForPlans(date)
-        setPlanListDialogOpen(true)
-      }
-      return
-    }
-
-    // No plans - create new plan (existing logic)
-    if (selectedElevators.size === 0) {
+    if (plans.length === 0) {
+      // No plans - show message
       toast({
-        title: 'Uyarı',
-        description: 'Lütfen önce asansör seçin',
-        variant: 'destructive',
+        title: 'Bilgi',
+        description: 'Bu tarihte planlanmış bakım yok. Planlama yapmak için asansör seçin.',
+        variant: 'default',
       })
       return
     }
 
-    if (isDateDisabled(date)) {
-      toast({
-        title: 'Uyarı',
-        description: 'Seçili asansörlerden biri bu ay için zaten planlanmış',
-        variant: 'destructive',
-      })
-      return
+    if (plans.length === 1) {
+      // Single plan - open edit modal
+      openEditDialog(plans[0])
+    } else {
+      // Multiple plans - open list modal
+      setSelectedDateForPlans(date)
+      setPlanListDialogOpen(true)
     }
-
-    const dateStr = date.toISOString().split('T')[0]
-
-    // Check for conflicts
-    const conflicts: number[] = []
-    selectedElevators.forEach((elevatorId) => {
-      const hasConflict = existingPlans.some((plan) => {
-        if (plan.elevatorId !== elevatorId || plan.status === 'CANCELLED' || plan.status === 'NOT_PLANNED') return false
-        const planDate = new Date(plan.scheduledDate)
-        const planDateStr = planDate.toISOString().split('T')[0]
-        return planDateStr === dateStr
-      })
-      if (hasConflict) conflicts.push(elevatorId)
-    })
-
-    if (conflicts.length > 0) {
-      toast({
-        title: 'Çakışma',
-        description: `${conflicts.length} asansör bu tarihe zaten planlanmış`,
-        variant: 'destructive',
-      })
-      return
-    }
-
-    // Create plans for all selected elevators
-    // Filter out invalid elevator IDs
-    const validElevatorIds = Array.from(selectedElevators).filter(
-      (id) => id != null && !isNaN(Number(id)) && id > 0
-    )
-
-    console.log('🔍 DEBUG handleDayClick:', {
-      selectedElevators: Array.from(selectedElevators),
-      validElevatorIds,
-      dateStr,
-    })
-
-    if (validElevatorIds.length === 0) {
-      toast({
-        title: 'Hata',
-        description: 'Geçerli asansör seçilmedi',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    // Check if template is selected
-    console.log('🔍 Template check:', { selectedTemplateId, type: typeof selectedTemplateId })
-    if (!selectedTemplateId || selectedTemplateId <= 0) {
-      toast({
-        title: 'Uyarı',
-        description: 'Lütfen bakım şablonu seçin',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    const promises = validElevatorIds.map((elevatorId) => {
-      const planData = {
-        elevatorId: Number(elevatorId),
-        templateId: Number(selectedTemplateId),
-        plannedDate: dateStr, // Backend expects "plannedDate", not "scheduledDate"
-      }
-      console.log('📤 Sending plan data:', planData)
-      console.log('📤 Template ID in payload:', planData.templateId, 'type:', typeof planData.templateId)
-      return createPlanMutation.mutateAsync(planData)
-    })
-
-    Promise.all(promises)
-      .then(() => {
-        toast({
-          title: 'Başarılı',
-          description: `${validElevatorIds.length} asansör için bakım planı oluşturuldu`,
-        })
-      })
-      .catch(() => {
-        // Error handling is done in mutation
-      })
   }
 
   const handleCompleteWithQR = (plan: MaintenancePlan) => {
@@ -975,11 +1008,12 @@ export function MaintenancePlanningPage() {
                         }
 
                         const isToday = date.toDateString() === new Date().toDateString()
-                        const plans = getPlansForDate(date) // Already excludes CANCELLED
+                        const dayPlans = getPlansForDate(date) // Already excludes CANCELLED - returns array
                         const isPast = date < new Date() && !isToday
                         const isDisabled = isDateDisabled(date) || isPast
-                        const hasPlanned = plans.some((p) => p.status === 'PLANNED')
-                        const hasCompleted = plans.some((p) => p.status === 'COMPLETED')
+                        const hasPlanned = dayPlans.some((p) => p.status === 'PLANNED')
+                        const hasCompleted = dayPlans.some((p) => p.status === 'COMPLETED')
+                        const planCount = dayPlans.length
                         // CANCELLED plans are not shown in calendar
 
                         return (
@@ -1012,19 +1046,22 @@ export function MaintenancePlanningPage() {
                                 {date.getDate()}
                               </span>
                               <div className="flex items-center gap-1">
-                              {plans.length > 0 && (
+                              {planCount > 0 && (
                                 <Badge
                                   variant={
                                     hasCompleted
                                       ? 'completed'
                                       : 'planned'
                                   }
-                                  className="h-5 px-1.5 text-xs font-semibold"
+                                  className={cn(
+                                    "h-5 px-1.5 text-xs font-semibold shrink-0",
+                                    planCount > 1 && "ring-2 ring-white shadow-sm"
+                                  )}
                                 >
-                                  {plans.length}
+                                  {planCount > 1 ? `${planCount} bakım` : planCount}
                                 </Badge>
                               )}
-                                {plans.length > 0 && !isPast && (
+                                {planCount > 0 && !isPast && (
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                       <button
@@ -1035,17 +1072,17 @@ export function MaintenancePlanningPage() {
                                       </button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-48">
-                                      {plans.length === 1 ? (
+                                      {planCount === 1 ? (
                                         <>
-                                          {plans[0].status === 'PLANNED' && (
+                                          {dayPlans[0].status === 'PLANNED' && (
                                             <>
-                                              <DropdownMenuItem onClick={() => openEditDialog(plans[0])}>
+                                              <DropdownMenuItem onClick={() => openEditDialog(dayPlans[0])}>
                                                 <Edit className="h-4 w-4 mr-2" />
                                                 Düzenle
                                               </DropdownMenuItem>
                                               <DropdownMenuItem onClick={() => {
-                                                setEditPlannedDate(plans[0].scheduledDate)
-                                                openEditDialog(plans[0])
+                                                setEditPlannedDate(dayPlans[0].scheduledDate)
+                                                openEditDialog(dayPlans[0])
                                               }}>
                                                 <Calendar className="h-4 w-4 mr-2" />
                                                 Tarih Değiştir
@@ -1053,7 +1090,7 @@ export function MaintenancePlanningPage() {
                                               <DropdownMenuSeparator />
                                               <DropdownMenuItem
                                                 onClick={() => {
-                                                  setPlanToCancel(plans[0])
+                                                  setPlanToCancel(dayPlans[0])
                                                   setCancelConfirmOpen(true)
                                                 }}
                                                 className="text-[#DC2626]"
@@ -1063,14 +1100,14 @@ export function MaintenancePlanningPage() {
                                               </DropdownMenuItem>
                                             </>
                                           )}
-                                          {plans[0].status === 'COMPLETED' && (
-                                            <DropdownMenuItem onClick={() => handleCompleteWithQR(plans[0])}>
+                                          {dayPlans[0].status === 'COMPLETED' && (
+                                            <DropdownMenuItem onClick={() => handleCompleteWithQR(dayPlans[0])}>
                                               <Eye className="h-4 w-4 mr-2" />
                                               QR Detay Gör
                                             </DropdownMenuItem>
                                           )}
                                           <DropdownMenuSeparator />
-                                          <DropdownMenuItem onClick={() => openEditDialog(plans[0])}>
+                                          <DropdownMenuItem onClick={() => openEditDialog(dayPlans[0])}>
                                             <Eye className="h-4 w-4 mr-2" />
                                             Detay Gör
                                           </DropdownMenuItem>
@@ -1081,7 +1118,7 @@ export function MaintenancePlanningPage() {
                                           setPlanListDialogOpen(true)
                                         }}>
                                           <Eye className="h-4 w-4 mr-2" />
-                                          {plans.length} Bakımı Görüntüle
+                                          {planCount} Bakımı Görüntüle
                                         </DropdownMenuItem>
                                       )}
                                     </DropdownMenuContent>
@@ -1090,8 +1127,10 @@ export function MaintenancePlanningPage() {
                               </div>
                             </div>
                             <div className="space-y-1 mt-2">
-                              {plans.slice(0, 2).map((plan) => {
-                                const elevator = elevators.find((e) => e.id === plan.elevatorId)
+                              {dayPlans.slice(0, 2).map((plan) => {
+                                // Use filter to get elevator, then take first result
+                                const matchingElevators = elevators.filter((e) => e.id === plan.elevatorId)
+                                const elevator = matchingElevators.length > 0 ? matchingElevators[0] : undefined
                                 const displayInfo = formatElevatorDisplayName(
                                   elevator || {
                                     kimlikNo: plan.elevatorCode || plan.elevatorName,
@@ -1115,9 +1154,9 @@ export function MaintenancePlanningPage() {
                                   </div>
                                 )
                               })}
-                              {plans.length > 2 && (
+                              {planCount > 2 && (
                                 <div className="text-xs text-[#6B7280] font-medium">
-                                  +{plans.length - 2} daha
+                                  +{planCount - 2} daha
                                 </div>
                               )}
                             </div>
@@ -1416,121 +1455,172 @@ export function MaintenancePlanningPage() {
 
       {/* Plan List Dialog (Multiple plans on same date) */}
       <Dialog open={planListDialogOpen} onOpenChange={setPlanListDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="pb-4 border-b border-[#E5E7EB]">
+            <DialogTitle className="text-2xl font-bold text-[#111827]">
               {selectedDateForPlans &&
                 new Date(selectedDateForPlans).toLocaleDateString('tr-TR', {
                   day: 'numeric',
                   month: 'long',
                   year: 'numeric',
-                })}{' '}
-              - Bakım Planları
+                })}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-[#6B7280] mt-1">
               Bu tarihte planlanmış bakımlar
             </DialogDescription>
           </DialogHeader>
+          
           {selectedDateForPlans && (
-            <div className="space-y-3 max-h-[500px] overflow-y-auto">
-              {getAllPlansForDate(selectedDateForPlans)
-                .filter((p) => p.status !== 'CANCELLED' && p.status !== 'NOT_PLANNED') // CANCELLED and NOT_PLANNED plans should not appear in list
-                .map((plan) => {
-                const elevator = elevators.find((e) => e.id === plan.elevatorId)
-                const displayInfo = formatElevatorDisplayName(
-                  elevator || {
-                    kimlikNo: plan.elevatorCode || plan.elevatorName,
-                    bina: plan.buildingName,
-                  }
-                )
-                return (
-                  <div
-                    key={plan.id}
-                    className="p-4 rounded-xl border border-[#E5E7EB] bg-white hover:shadow-md transition-all"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-semibold text-[#111827]">
-                            🛗 {displayInfo.fullName}
-                          </span>
-                          <Badge
-                            variant={
-                              plan.status === 'COMPLETED'
-                                ? 'completed'
-                                : plan.status === 'CANCELLED'
-                                  ? 'aborted'
-                                  : 'planned'
-                            }
-                            className="text-xs"
-                          >
-                            {plan.status === 'COMPLETED'
-                              ? 'Tamamlandı'
-                              : plan.status === 'CANCELLED'
-                                ? 'İptal Edildi'
-                                : 'Planlandı'}
-                          </Badge>
-                        </div>
-                        <div className="text-sm text-[#6B7280] space-y-1">
-                          <div>{plan.buildingName || elevator?.bina}</div>
-                          <div>
-                            {new Date(plan.scheduledDate).toLocaleDateString('tr-TR', {
-                              day: 'numeric',
-                              month: 'long',
-                              year: 'numeric',
-                            })}
+            <>
+              {/* Plans List */}
+              <div className="flex-1 overflow-y-auto py-4 space-y-3">
+                {getAllPlansForDate(selectedDateForPlans)
+                  .filter((p) => p.status !== 'CANCELLED' && p.status !== 'NOT_PLANNED')
+                  .length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-16 h-16 rounded-full bg-[#F3F4F6] flex items-center justify-center mb-4">
+                      <FileText className="h-8 w-8 text-[#9CA3AF]" />
+                    </div>
+                    <p className="text-lg font-semibold text-[#111827] mb-1">
+                      Henüz bakım planlanmamış
+                    </p>
+                    <p className="text-sm text-[#6B7280] mb-4">
+                      Bu tarihe yeni bakım eklemek için yukarıdaki butonu kullanın
+                    </p>
+                  </div>
+                ) : (
+                  getAllPlansForDate(selectedDateForPlans)
+                    .filter((p) => p.status !== 'CANCELLED' && p.status !== 'NOT_PLANNED')
+                    .map((plan) => {
+                      const elevator = elevators.find((e) => e.id === plan.elevatorId)
+                      const displayInfo = formatElevatorDisplayName(
+                        elevator || {
+                          kimlikNo: plan.elevatorCode || plan.elevatorName,
+                          bina: plan.buildingName,
+                        }
+                      )
+                      return (
+                        <div
+                          key={plan.id}
+                          className="group p-5 rounded-xl border border-[#E5E7EB] bg-white hover:border-[#4F46E5] hover:shadow-lg transition-all duration-200"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              {/* Elevator Name & Status */}
+                              <div className="flex items-center gap-3 mb-3">
+                                <span className="text-lg font-bold text-[#111827] truncate">
+                                  🛗 {displayInfo.fullName}
+                                </span>
+                                <Badge
+                                  variant={
+                                    plan.status === 'COMPLETED'
+                                      ? 'completed'
+                                      : plan.status === 'IN_PROGRESS'
+                                        ? 'inProgress'
+                                        : 'planned'
+                                  }
+                                  className="text-xs font-semibold shrink-0"
+                                >
+                                  {plan.status === 'COMPLETED'
+                                    ? 'Tamamlandı'
+                                    : plan.status === 'IN_PROGRESS'
+                                      ? 'Devam Ediyor'
+                                      : 'Planlandı'}
+                                </Badge>
+                              </div>
+                              
+                              {/* Building & Date Info */}
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-2 text-sm text-[#6B7280]">
+                                  <span className="font-medium">Bina:</span>
+                                  <span>{plan.buildingName || elevator?.bina || '—'}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-[#6B7280]">
+                                  <span className="font-medium">Tarih:</span>
+                                  <span>
+                                    {new Date(plan.scheduledDate).toLocaleDateString('tr-TR', {
+                                      day: 'numeric',
+                                      month: 'long',
+                                      year: 'numeric',
+                                    })}
+                                  </span>
+                                </div>
+                                {plan.note && (
+                                  <div className="flex items-start gap-2 text-sm text-[#6B7280] mt-2 pt-2 border-t border-[#F3F4F6]">
+                                    <span className="font-medium shrink-0">Not:</span>
+                                    <span className="line-clamp-2">{plan.note}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {plan.status === 'PLANNED' && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setPlanListDialogOpen(false)
+                                      openEditDialog(plan)
+                                    }}
+                                    className="border-[#4F46E5] text-[#4F46E5] hover:bg-[#EEF2FF] hover:border-[#4F46E5]"
+                                  >
+                                    <Edit className="h-4 w-4 mr-1.5" />
+                                    Düzenle
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => {
+                                      setPlanToCancel(plan)
+                                      setCancelConfirmOpen(true)
+                                      setPlanListDialogOpen(false)
+                                    }}
+                                    className="hover:bg-red-600"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-1.5" />
+                                    İptal
+                                  </Button>
+                                </>
+                              )}
+                              {plan.status === 'IN_PROGRESS' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled
+                                  className="opacity-50 cursor-not-allowed"
+                                >
+                                  <Settings className="h-4 w-4 mr-1.5" />
+                                  Devam Ediyor
+                                </Button>
+                              )}
+                              {plan.status === 'COMPLETED' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setPlanListDialogOpen(false)
+                                    handleCompleteWithQR(plan)
+                                  }}
+                                  className="border-green-200 text-green-600 hover:bg-green-50"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1.5" />
+                                  Detay
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {plan.status === 'PLANNED' && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setPlanListDialogOpen(false)
-                                openEditDialog(plan)
-                              }}
-                            >
-                              <Edit className="h-4 w-4 mr-1" />
-                              Düzenle
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => {
-                                setPlanToCancel(plan)
-                                setCancelConfirmOpen(true)
-                                setPlanListDialogOpen(false)
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              İptal
-                            </Button>
-                          </>
-                        )}
-                        {plan.status === 'COMPLETED' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setPlanListDialogOpen(false)
-                              handleCompleteWithQR(plan)
-                            }}
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Detay
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                      )
+                    })
+                )}
+              </div>
+            </>
           )}
-          <DialogFooter>
+          
+          <DialogFooter className="pt-4 border-t border-[#E5E7EB]">
             <Button
               variant="outline"
               onClick={() => setPlanListDialogOpen(false)}

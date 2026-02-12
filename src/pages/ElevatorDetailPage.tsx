@@ -289,18 +289,14 @@ export function ElevatorDetailPage() {
               <Label className="text-muted-foreground">TC Kimlik No</Label>
               <p className="text-lg font-medium text-muted-foreground flex items-center gap-2">
                 <CreditCard className="h-4 w-4" />
-                {elevator.managerTc 
-                  ? `${elevator.managerTc.substring(0, 4)}${'*'.repeat(7)}`
-                  : '-'}
+                {elevator.managerTc || '-'}
               </p>
             </div>
             <div>
               <Label className="text-muted-foreground">Telefon</Label>
               <p className="text-lg font-medium text-muted-foreground flex items-center gap-2">
                 <Phone className="h-4 w-4" />
-                {elevator.managerPhone 
-                  ? `${elevator.managerPhone.substring(0, 4)}***${elevator.managerPhone.substring(elevator.managerPhone.length - 4)}`
-                  : '-'}
+                {elevator.managerPhone || '-'}
               </p>
             </div>
             {elevator.managerEmail && (
