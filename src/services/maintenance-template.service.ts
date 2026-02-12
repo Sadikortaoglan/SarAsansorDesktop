@@ -5,7 +5,7 @@ import { API_ENDPOINTS } from '@/lib/api-endpoints'
 export interface MaintenanceTemplate {
   id: number
   name: string
-  status: 'ACTIVE' | 'INACTIVE'
+  status: 'ACTIVE' | 'PASSIVE'
   sectionCount?: number
   sections?: MaintenanceSection[]
 }
@@ -89,13 +89,13 @@ export interface UpdateSubSectionRequest {
 export interface CreateTemplateRequest {
   name: string
   description?: string
-  status?: 'ACTIVE' | 'INACTIVE'
+  status?: 'ACTIVE' | 'PASSIVE'
 }
 
 export interface UpdateTemplateRequest {
   name?: string
   description?: string
-  status?: 'ACTIVE' | 'INACTIVE'
+  status?: 'ACTIVE' | 'PASSIVE'
 }
 
 function mapTemplateFromBackend(backend: any): MaintenanceTemplate {

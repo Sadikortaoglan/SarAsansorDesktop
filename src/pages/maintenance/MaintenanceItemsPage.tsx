@@ -55,7 +55,7 @@ export function MaintenanceItemsPage() {
   const [deleteTemplateConfirmOpen, setDeleteTemplateConfirmOpen] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [templateDescription, setTemplateDescription] = useState('')
-  const [templateStatus, setTemplateStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE')
+  const [templateStatus, setTemplateStatus] = useState<'ACTIVE' | 'PASSIVE'>('ACTIVE')
   const [selectedTemplateForEdit, setSelectedTemplateForEdit] = useState<MaintenanceTemplate | null>(null)
   const [templateToDelete, setTemplateToDelete] = useState<MaintenanceTemplate | null>(null)
 
@@ -401,7 +401,7 @@ export function MaintenanceItemsPage() {
 
   // Create Template Mutation
   const createTemplateMutation = useMutation({
-    mutationFn: (request: { name: string; description?: string; status: 'ACTIVE' | 'INACTIVE' }) => {
+    mutationFn: (request: { name: string; description?: string; status: 'ACTIVE' | 'PASSIVE' }) => {
       return maintenanceTemplateService.create(request)
     },
     onSuccess: async () => {
@@ -427,7 +427,7 @@ export function MaintenanceItemsPage() {
 
   // Update Template Mutation
   const updateTemplateMutation = useMutation({
-    mutationFn: ({ id, ...request }: { id: number; name?: string; description?: string; status?: 'ACTIVE' | 'INACTIVE' }) => {
+    mutationFn: ({ id, ...request }: { id: number; name?: string; description?: string; status?: 'ACTIVE' | 'PASSIVE' }) => {
       return maintenanceTemplateService.update(id, request)
     },
     onSuccess: async () => {
@@ -1542,14 +1542,14 @@ export function MaintenanceItemsPage() {
               <Label htmlFor="templateStatus">Durum</Label>
               <Select
                 value={templateStatus}
-                onValueChange={(value) => setTemplateStatus(value as 'ACTIVE' | 'INACTIVE')}
+                onValueChange={(value) => setTemplateStatus(value as 'ACTIVE' | 'PASSIVE')}
               >
                 <SelectTrigger className="h-[44px] bg-white border-[#D1D5DB] rounded-[8px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ACTIVE">Aktif</SelectItem>
-                  <SelectItem value="INACTIVE">Pasif</SelectItem>
+                  <SelectItem value="PASSIVE">Pasif</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1611,14 +1611,14 @@ export function MaintenanceItemsPage() {
               <Label htmlFor="editTemplateStatus">Durum</Label>
               <Select
                 value={templateStatus}
-                onValueChange={(value) => setTemplateStatus(value as 'ACTIVE' | 'INACTIVE')}
+                onValueChange={(value) => setTemplateStatus(value as 'ACTIVE' | 'PASSIVE')}
               >
                 <SelectTrigger className="h-[44px] bg-white border-[#D1D5DB] rounded-[8px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ACTIVE">Aktif</SelectItem>
-                  <SelectItem value="INACTIVE">Pasif</SelectItem>
+                  <SelectItem value="PASSIVE">Pasif</SelectItem>
                 </SelectContent>
               </Select>
             </div>
