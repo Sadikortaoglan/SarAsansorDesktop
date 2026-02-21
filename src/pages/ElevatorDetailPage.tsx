@@ -14,7 +14,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Plus, Trash2, User, CreditCard, Phone, Mail, Building2, Calendar, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Trash2, User, CreditCard, Phone, Mail, Building2, Calendar, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { formatDate, formatDateShort, formatCurrency, cn } from '@/lib/utils'
 import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
 import { ElevatorQRValidationDialog } from '@/components/maintenance/ElevatorQRValidationDialog'
@@ -29,7 +29,7 @@ export function ElevatorDetailPage() {
   const { toast } = useToast()
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [maintenanceToDelete, setMaintenanceToDelete] = useState<number | null>(null)
-  const [isMaintenanceDialogOpen, setIsMaintenanceDialogOpen] = useState(false)
+  // const [isMaintenanceDialogOpen, setIsMaintenanceDialogOpen] = useState(false) // Reserved for future use
   const [isQRValidationDialogOpen, setIsQRValidationDialogOpen] = useState(false)
   const [isMaintenanceFormDialogOpen, setIsMaintenanceFormDialogOpen] = useState(false)
   const [validatedQRSessionToken, setValidatedQRSessionToken] = useState<string | null>(null)

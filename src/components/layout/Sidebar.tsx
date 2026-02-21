@@ -21,8 +21,6 @@ import {
   PlusCircle,
   Settings,
   Calendar,
-  CheckCircle2,
-  Clock,
   List,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'

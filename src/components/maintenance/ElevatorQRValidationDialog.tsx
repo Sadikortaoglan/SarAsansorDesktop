@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/AuthContext'
-import { QrCode, Camera, Smartphone, Monitor, Loader2 } from 'lucide-react'
+import { QrCode, Smartphone, Monitor, Loader2 } from 'lucide-react'
 import { qrSessionService } from '@/services/qr-session.service'
+import { MobileQrScanner } from '@/components/maintenance/MobileQrScanner'
 
 interface ElevatorQRValidationDialogProps {
   open: boolean
@@ -24,7 +25,7 @@ export function ElevatorQRValidationDialog({
   open,
   onOpenChange,
   elevatorId,
-  elevatorCode,
+  // elevatorCode, // Reserved for future use
   onValidationSuccess,
 }: ElevatorQRValidationDialogProps) {
   const { toast } = useToast()
@@ -32,7 +33,6 @@ export function ElevatorQRValidationDialog({
   const [qrCode, setQrCode] = useState('')
   const [isValidating, setIsValidating] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   // Check if user is ADMIN (can bypass QR)
   const isAdmin = hasRole('PATRON') // PATRON = ADMIN in this system
@@ -59,8 +59,9 @@ export function ElevatorQRValidationDialog({
     }
   }, [open])
 
-  const handleQRSubmit = async () => {
-    if (!qrCode.trim()) {
+  const handleQRSubmit = async (scannedCode?: string) => {
+    const finalCode = (scannedCode ?? qrCode).trim()
+    if (!finalCode) {
       toast({
         title: 'Hata',
         description: 'Lütfen QR kodunu girin veya tarayın',
@@ -72,9 +73,10 @@ export function ElevatorQRValidationDialog({
     setIsValidating(true)
 
     try {
+      console.log('[ElevatorQRValidationDialog] submit validation request')
       // Call new session token API
       const response = await qrSessionService.validate({
-        qrCode: qrCode.trim(),
+        qrCode: finalCode,
         elevatorId: elevatorId, // Optional but helps backend
       })
 
@@ -138,12 +140,6 @@ export function ElevatorQRValidationDialog({
     }
   }
 
-  const handleCameraClick = () => {
-    if (cameraInputRef.current) {
-      cameraInputRef.current.click()
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -177,37 +173,20 @@ export function ElevatorQRValidationDialog({
                 className="flex-1"
                 autoFocus
               />
-              {isMobile && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCameraClick}
-                  title="Kamerayı aç"
-                >
-                  <Camera className="h-4 w-4" />
-                </Button>
-              )}
             </div>
-            
-            {/* Hidden camera input for mobile */}
-            {isMobile && (
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => {
-                  // Camera capture - QR scanning would be handled by a library
-                  toast({
-                    title: 'Bilgi',
-                    description: 'Kamera açıldı. QR kodu tarayın veya manuel girin.',
-                  })
-                }}
-                className="hidden"
-              />
-            )}
           </div>
+
+          {isMobile && (
+            <MobileQrScanner
+              open={open}
+              enabled={!isValidating}
+              onDetected={(value) => {
+                console.log('[ElevatorQRValidationDialog] scan success callback')
+                setQrCode(value)
+                void handleQRSubmit(value)
+              }}
+            />
+          )}
 
           {/* Device Info */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -254,7 +233,9 @@ export function ElevatorQRValidationDialog({
           </Button>
           <Button
             type="button"
-            onClick={handleQRSubmit}
+            onClick={() => {
+              void handleQRSubmit()
+            }}
             disabled={!qrCode.trim() || isValidating}
             className="bg-gradient-to-r from-indigo-500 to-indigo-600"
           >

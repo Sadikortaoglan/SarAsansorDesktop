@@ -62,14 +62,14 @@ export function formatElevatorDisplayName(
     durak?: string | null
     asansorNo?: string | null
   },
-  options: {
+  _options?: {
     /** Include building name in full format */
     includeBuilding?: boolean
     /** Include address */
     includeAddress?: boolean
     /** Show technical code as badge */
     showTechnicalCode?: boolean
-  } = {}
+  }
 ): ElevatorDisplayInfo {
   const { block, number } = parseElevatorCode(elevator.kimlikNo)
   const technicalCode = elevator.kimlikNo || `ELEV-${elevator.durak || ''}`

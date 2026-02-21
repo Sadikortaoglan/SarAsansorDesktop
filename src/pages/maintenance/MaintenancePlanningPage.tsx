@@ -23,17 +23,17 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import { formatDateForAPI } from '@/lib/date-utils'
-import { useAuth } from '@/contexts/AuthContext'
+// import { formatDateForAPI } from '@/lib/date-utils' // Reserved for future use
+// import { useAuth } from '@/contexts/AuthContext' // Reserved for future use
 import { ElevatorQRValidationDialog } from '@/components/maintenance/ElevatorQRValidationDialog'
 import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
-import { qrSessionService } from '@/services/qr-session.service'
+// import { qrSessionService } from '@/services/qr-session.service' // Reserved for future use
 
 export function MaintenancePlanningPage() {
   const { toast } = useToast()
-  const { hasRole } = useAuth()
+  // const { hasRole } = useAuth() // Reserved for future use
   const queryClient = useQueryClient()
-  const isAdmin = hasRole('PATRON') // PATRON = ADMIN in this system
+  // const isAdmin = hasRole('PATRON') // PATRON = ADMIN in this system // Reserved for future use
   
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedBuilding, setSelectedBuilding] = useState<string>('all')

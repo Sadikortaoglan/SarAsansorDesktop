@@ -245,7 +245,9 @@ export const elevatorService = {
     error?: string
   }> => {
     try {
-      const { data } = await apiClient.get<ApiResponse<any>>(API_ENDPOINTS.QR_VALIDATE, {
+      // TODO: QR validation endpoint moved to qr-session service
+      // This method is deprecated, use qrSessionService.validate instead
+      const { data } = await apiClient.get<ApiResponse<any>>(API_ENDPOINTS.QR_SESSION.VALIDATE, {
         params: { e: elevatorCode, s: signature },
       })
       const unwrapped = unwrapResponse(data)

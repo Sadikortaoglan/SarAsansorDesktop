@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit, Trash2, Settings, ChevronDown, ChevronRight, GripVertical, X } from 'lucide-react'
+import { Plus, Edit, Trash2, ChevronDown, ChevronRight, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -102,7 +102,7 @@ export function MaintenanceItemsPage() {
       
       return { previousTemplate }
     },
-    onSuccess: async (newSection) => {
+    onSuccess: async () => {
       await refetchTemplate()
       setSectionDialogOpen(false)
       setSectionName('')
@@ -111,7 +111,7 @@ export function MaintenanceItemsPage() {
         description: 'Bölüm başarıyla eklendi',
       })
     },
-    onError: (error: any, name, context) => {
+    onError: (error: any, _name, context) => {
       if (context?.previousTemplate) {
         queryClient.setQueryData(['maintenance-template', selectedTemplate], context.previousTemplate)
       }
@@ -155,7 +155,7 @@ export function MaintenanceItemsPage() {
         description: 'Bölüm başarıyla güncellendi',
       })
     },
-    onError: (error: any, variables, context) => {
+    onError: (error: any, _variables, context) => {
       if (context?.previousTemplate) {
         queryClient.setQueryData(['maintenance-template', selectedTemplate], context.previousTemplate)
       }
@@ -176,8 +176,8 @@ export function MaintenanceItemsPage() {
       const previousTemplate = queryClient.getQueryData<MaintenanceTemplate>(['maintenance-template', selectedTemplate])
       
       if (previousTemplate && itemToDelete?.type === 'section') {
-        const section = previousTemplate.sections?.find((s) => s.id === sectionId)
-        const itemCount = section?.items?.length || 0
+        // const section = previousTemplate.sections?.find((s) => s.id === sectionId) // Reserved for future use
+        // const itemCount = section?.items?.length || 0 // Reserved for future use
         const updatedTemplate = {
           ...previousTemplate,
           sections: previousTemplate.sections?.filter((s) => s.id !== sectionId) || [],
@@ -197,7 +197,7 @@ export function MaintenanceItemsPage() {
         description: 'Bölüm başarıyla silindi',
       })
     },
-    onError: (error: any, sectionId, context) => {
+    onError: (error: any, _sectionId, context) => {
       if (context?.previousTemplate) {
         queryClient.setQueryData(['maintenance-template', selectedTemplate], context.previousTemplate)
       }
@@ -283,7 +283,7 @@ export function MaintenanceItemsPage() {
         description: 'Madde başarıyla eklendi',
       })
     },
-    onError: (error: any, request, context) => {
+    onError: (error: any, _request, context) => {
       if (context?.previousTemplate) {
         queryClient.setQueryData(['maintenance-template', selectedTemplate], context.previousTemplate)
       }
@@ -338,7 +338,7 @@ export function MaintenanceItemsPage() {
         description: 'Madde başarıyla güncellendi',
       })
     },
-    onError: (error: any, variables, context) => {
+    onError: (error: any, _variables, context) => {
       if (context?.previousTemplate) {
         queryClient.setQueryData(['maintenance-template', selectedTemplate], context.previousTemplate)
       }
@@ -363,7 +363,7 @@ export function MaintenanceItemsPage() {
       
       // Optimistically update
       if (previousTemplate && itemToDelete?.type === 'item') {
-        const section = previousTemplate.sections?.find((s) => s.items?.some((item) => item.id === itemId))
+        // const section = previousTemplate.sections?.find((s) => s.items?.some((item) => item.id === itemId)) // Reserved for future use
         const updatedTemplate = {
           ...previousTemplate,
           sections: previousTemplate.sections?.map((section) => ({
@@ -385,7 +385,7 @@ export function MaintenanceItemsPage() {
         description: 'Madde başarıyla silindi',
       })
     },
-    onError: (error: any, itemId, context) => {
+    onError: (error: any, _itemId, context) => {
       // Revert optimistic update
       if (context?.previousTemplate) {
         queryClient.setQueryData(['maintenance-template', selectedTemplate], context.previousTemplate)
@@ -522,7 +522,7 @@ export function MaintenanceItemsPage() {
         description: 'Bakım şablonu başarıyla silindi',
       })
     },
-    onError: (error: any, templateId, context) => {
+    onError: (error: any, _templateId, context) => {
       if (context?.previousTemplates) {
         queryClient.setQueryData(['maintenance-templates'], context.previousTemplates)
       }

@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/AuthContext'
-import { QrCode, Camera, Smartphone, Monitor } from 'lucide-react'
+import { QrCode, Smartphone, Monitor } from 'lucide-react'
 import { maintenanceExecutionService } from '@/services/maintenance-execution.service'
+import { MobileQrScanner } from '@/components/maintenance/MobileQrScanner'
 
 interface QRStartDialogProps {
   open: boolean
@@ -22,16 +23,14 @@ export function QRStartDialog({
   onOpenChange,
   maintenancePlanId,
   elevatorId,
-  onSuccess,
+  // onSuccess, // Reserved for future use
   onOpenMaintenanceForm,
 }: QRStartDialogProps) {
   const { toast } = useToast()
-  const { user, hasRole } = useAuth()
+  const { hasRole } = useAuth()
   const [qrCode, setQrCode] = useState('')
   const [isValidating, setIsValidating] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   // Detect mobile device
   useEffect(() => {
@@ -58,8 +57,9 @@ export function QRStartDialog({
     }
   }, [open])
 
-  const handleQRSubmit = async () => {
-    if (!qrCode.trim()) {
+  const handleQRSubmit = async (scannedCode?: string) => {
+    const finalCode = (scannedCode ?? qrCode).trim()
+    if (!finalCode) {
       toast({
         title: 'Hata',
         description: 'Lütfen QR kodunu girin veya tarayın',
@@ -71,8 +71,9 @@ export function QRStartDialog({
     setIsValidating(true)
 
     try {
+      console.log('[QRStartDialog] submit validation request')
       // Validate QR token
-      const validation = await maintenanceExecutionService.validateQRToken(qrCode.trim())
+      const validation = await maintenanceExecutionService.validateQRToken(finalCode)
       
       if (!validation.valid) {
         toast({
@@ -144,33 +145,6 @@ export function QRStartDialog({
     })
   }
 
-  const handleCameraClick = () => {
-    if (cameraInputRef.current) {
-      cameraInputRef.current.click()
-    }
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      // For QR code scanning from file, you might need a QR decoder library
-      // For now, we'll just show a message
-      toast({
-        title: 'Bilgi',
-        description: 'QR kod dosyası seçildi. Manuel giriş yapabilirsiniz.',
-      })
-    }
-  }
-
-  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Camera capture - QR scanning would be handled by a library like html5-qrcode
-    // For now, we'll just allow manual input
-    toast({
-      title: 'Bilgi',
-      description: 'Kamera açıldı. QR kodu tarayın veya manuel girin.',
-    })
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -204,31 +178,20 @@ export function QRStartDialog({
                 className="flex-1"
                 autoFocus
               />
-              {isMobile && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCameraClick}
-                  title="Kamerayı aç"
-                >
-                  <Camera className="h-4 w-4" />
-                </Button>
-              )}
             </div>
-            
-            {/* Hidden camera input for mobile */}
-            {isMobile && (
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleCameraCapture}
-                className="hidden"
-              />
-            )}
           </div>
+
+          {isMobile && (
+            <MobileQrScanner
+              open={open}
+              enabled={!isValidating}
+              onDetected={(value) => {
+                console.log('[QRStartDialog] scan success callback')
+                setQrCode(value)
+                void handleQRSubmit(value)
+              }}
+            />
+          )}
 
           {/* Device Info */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -275,7 +238,9 @@ export function QRStartDialog({
           </Button>
           <Button
             type="button"
-            onClick={handleQRSubmit}
+            onClick={() => {
+              void handleQRSubmit()
+            }}
             disabled={!qrCode.trim() || isValidating}
             className="bg-gradient-to-r from-indigo-500 to-indigo-600"
           >

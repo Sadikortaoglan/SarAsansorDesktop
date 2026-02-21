@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Calendar, QrCode, CheckCircle2, Clock, X, Edit, Eye, Play, FileText, Search, Filter, Camera, Smartphone, Monitor, Loader2 } from 'lucide-react'
+import { Calendar, QrCode, CheckCircle2, X, Edit, Eye, Play, FileText, Search, Filter, Smartphone, Monitor, Loader2 } from 'lucide-react'
 import { maintenancePlanService, type MaintenancePlan } from '@/services/maintenance-plan.service'
 import { maintenanceExecutionService } from '@/services/maintenance-execution.service'
 import { elevatorService } from '@/services/elevator.service'
@@ -16,17 +16,18 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
 import { formatElevatorDisplayName } from '@/lib/elevator-format'
-import { formatDateForAPI } from '@/lib/date-utils'
+// import { formatDateForAPI } from '@/lib/date-utils' // Reserved for future use
 import { cn } from '@/lib/utils'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { MaintenanceFormDialog } from '@/components/MaintenanceFormDialog'
+import { MobileQrScanner } from '@/components/maintenance/MobileQrScanner'
 
 type StatusFilter = 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'ALL'
 
 export function MaintenancePage() {
   const { toast } = useToast()
-  const { user, hasRole } = useAuth()
+  const { hasRole } = useAuth()
   const queryClient = useQueryClient()
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('ALL')
   const [selectedPlan, setSelectedPlan] = useState<MaintenancePlan | null>(null)
@@ -39,7 +40,6 @@ export function MaintenancePage() {
   const [qrCode, setQrCode] = useState('')
   const [isValidatingQR, setIsValidatingQR] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState('')
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false)
@@ -79,7 +79,7 @@ export function MaintenancePage() {
   })
 
   // Fetch all maintenance plans
-  const { data: allPlans = [], isLoading, error } = useQuery({
+  const { data: allPlans = [], isLoading } = useQuery({
     queryKey: ['maintenance-plans', 'all'],
     queryFn: async () => {
       console.log('🔍 MAINTENANCE PAGE - Fetching all plans')
@@ -200,7 +200,7 @@ export function MaintenancePage() {
 
   // Remote start mutation (ADMIN only)
   const remoteStartMutation = useMutation({
-    mutationFn: async ({ planId }: { planId: number }) => {
+    mutationFn: async ({ planId: _planId }: { planId: number }) => {
       if (!selectedPlan) throw new Error('Plan seçilmedi')
       
       // Get remote start session token
@@ -344,8 +344,9 @@ export function MaintenancePage() {
   }
 
   // Handle QR validation and start maintenance
-  const handleQRSubmit = async () => {
-    if (!selectedPlan || !qrCode.trim()) {
+  const handleQRSubmit = async (scannedCode?: string) => {
+    const finalCode = (scannedCode ?? qrCode).trim()
+    if (!selectedPlan || !finalCode) {
       toast({
         title: 'Hata',
         description: 'Lütfen QR kodunu girin veya tarayın',
@@ -357,9 +358,10 @@ export function MaintenancePage() {
     setIsValidatingQR(true)
 
     try {
+      console.log('[MaintenancePage] submit validation request')
       // Validate QR and get session token
       const response = await qrSessionService.validate({
-        qrCode: qrCode.trim(),
+        qrCode: finalCode,
         elevatorId: selectedPlan.elevatorId,
       })
 
@@ -894,38 +896,20 @@ export function MaintenancePage() {
                     autoFocus
                     disabled={isValidatingQR}
                   />
-                  {isMobile && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => cameraInputRef.current?.click()}
-                      title="Kamerayı aç"
-                      disabled={isValidatingQR}
-                    >
-                      <Camera className="h-4 w-4" />
-                    </Button>
-                  )}
                 </div>
-                
-                {/* Hidden camera input for mobile */}
-                {isMobile && (
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={(e) => {
-                      // Camera capture - QR scanning would be handled by a library
-                      toast({
-                        title: 'Bilgi',
-                        description: 'Kamera açıldı. QR kodu tarayın veya manuel girin.',
-                      })
-                    }}
-                    className="hidden"
-                  />
-                )}
               </div>
+
+              {isMobile && (
+                <MobileQrScanner
+                  open={qrDialogOpen && !completeDialogOpen && !maintenanceFormDialogOpen}
+                  enabled={!isValidatingQR && !startMaintenanceMutation.isPending}
+                  onDetected={(value) => {
+                    console.log('[MaintenancePage] scan success callback')
+                    setQrCode(value)
+                    void handleQRSubmit(value)
+                  }}
+                />
+              )}
 
               {/* Device Info */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -986,7 +970,9 @@ export function MaintenancePage() {
               İptal
             </Button>
             <Button
-              onClick={handleQRSubmit}
+              onClick={() => {
+                void handleQRSubmit()
+              }}
               disabled={!qrCode.trim() || isValidatingQR || startMaintenanceMutation.isPending}
               className="bg-gradient-to-r from-indigo-500 to-indigo-600"
             >
@@ -1197,7 +1183,9 @@ export function MaintenancePage() {
               İptal
             </Button>
             <Button
-              onClick={handleQRSubmit}
+              onClick={() => {
+                void handleQRSubmit()
+              }}
               disabled={
                 !qrCode.trim() ||
                 completePhotos.length < 4 ||

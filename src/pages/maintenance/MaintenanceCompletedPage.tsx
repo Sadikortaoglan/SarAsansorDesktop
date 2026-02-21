@@ -176,7 +176,7 @@ export function MaintenanceCompletedPage() {
       header: 'Durum',
       mobileLabel: 'Durum',
       mobilePriority: 5,
-      render: (row: MaintenancePlan) => getStatusBadge(),
+      render: () => getStatusBadge(),
     },
     {
       key: 'actions',

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+// import { useNavigate } from 'react-router-dom' // Reserved for future use
 import { revisionOfferService, type RevisionOffer } from '@/services/revision-offer.service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,17 +8,12 @@ import { TableResponsive } from '@/components/ui/table-responsive'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useToast } from '@/components/ui/use-toast'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Edit, Trash2, Search, FileText, Download } from 'lucide-react'
+import { Plus, Edit, Trash2, Search, Download } from 'lucide-react'
 import { formatDateShort, formatCurrency } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RevisionOfferFormDialog } from './RevisionOfferFormDialog'
@@ -30,7 +25,7 @@ export function RevisionOffersPage() {
   const [selectedOffer, setSelectedOffer] = useState<RevisionOffer | null>(null)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [offerToDelete, setOfferToDelete] = useState<number | null>(null)
-  const navigate = useNavigate()
+  // const navigate = useNavigate() // Reserved for future use
   const queryClient = useQueryClient()
   const { toast } = useToast()
 

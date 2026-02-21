@@ -9,10 +9,10 @@ import { API_ENDPOINTS } from '@/lib/api-endpoints'
 
 interface ElevatorQRCodeProps {
   elevatorId: number
-  elevatorName?: string
+  elevatorName?: string // Reserved for future use
 }
 
-export function ElevatorQRCode({ elevatorId, elevatorName }: ElevatorQRCodeProps) {
+export function ElevatorQRCode({ elevatorId }: ElevatorQRCodeProps) {
   const { toast } = useToast()
   const [isDownloadingPNG, setIsDownloadingPNG] = useState(false)
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false)

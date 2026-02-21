@@ -1,39 +1,39 @@
-import { RevisionOffersPage } from './RevisionOffersPage'
+// import { RevisionOffersPage } from './RevisionOffersPage' // Reserved for future use
 import { useQuery } from '@tanstack/react-query'
 import { revisionOfferService } from '@/services/revision-offer.service'
 import { useState } from 'react'
 import { TableResponsive } from '@/components/ui/table-responsive'
-import { Badge } from '@/components/ui/badge'
+// import { Badge } from '@/components/ui/badge' // Reserved for future use
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Search, Download, Edit, Trash2 } from 'lucide-react'
+import { Search, Download } from 'lucide-react'
 import { formatDateShort, formatCurrency } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/use-toast'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { useMutation } from '@tanstack/react-query'
+// import { ConfirmDialog } from '@/components/ui/confirm-dialog' // Reserved for future use
 
 export function RevisionOffersConvertedPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const { toast } = useToast()
-  const queryClient = useQueryClient()
+  // const queryClient = useQueryClient() // Reserved for future use
 
   const { data: offers, isLoading } = useQuery({
     queryKey: ['revision-offers', 'converted'],
     queryFn: () => revisionOfferService.getAll({ converted: true }),
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => revisionOfferService.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['revision-offers'] })
-      toast({
-        title: 'Başarılı',
-        description: 'Revizyon teklifi başarıyla silindi.',
-        variant: 'success',
-      })
-    },
-  })
+  // const deleteMutation = useMutation({ // Reserved for future use
+  //   mutationFn: (id: number) => revisionOfferService.delete(id),
+  //   onSuccess: () => {
+  //     queryClient.invalidateQueries({ queryKey: ['revision-offers'] })
+  //     toast({
+  //       title: 'Başarılı',
+  //       description: 'Revizyon teklifi başarıyla silindi.',
+  //       variant: 'success',
+  //     })
+  //   },
+  // })
 
   const generatePDFMutation = useMutation({
     mutationFn: (id: number) => revisionOfferService.generatePDF(id),

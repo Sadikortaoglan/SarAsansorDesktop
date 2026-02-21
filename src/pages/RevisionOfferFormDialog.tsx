@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { revisionOfferService, type RevisionOffer, type RevisionOfferPart } from '@/services/revision-offer.service'
+import { revisionOfferService, type RevisionOffer } from '@/services/revision-offer.service'
 import { elevatorService } from '@/services/elevator.service'
 import { partService } from '@/services/part.service'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Trash2, X } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import {
   Table,
@@ -100,6 +100,7 @@ export function RevisionOfferFormDialog({ offer, onClose, onSuccess }: RevisionO
           const selectedPart = partsArray.find((part) => part.id === Number(p.partId))
           return {
             partId: Number(p.partId),
+            partName: selectedPart?.name || '',
             quantity: p.quantity,
             unitPrice: p.unitPrice || selectedPart?.unitPrice || 0,
             description: p.description,
@@ -137,6 +138,7 @@ export function RevisionOfferFormDialog({ offer, onClose, onSuccess }: RevisionO
           const selectedPart = partsArray.find((part) => part.id === Number(p.partId))
           return {
             partId: Number(p.partId),
+            partName: selectedPart?.name || '',
             quantity: p.quantity,
             unitPrice: p.unitPrice || selectedPart?.unitPrice || 0,
             description: p.description,
