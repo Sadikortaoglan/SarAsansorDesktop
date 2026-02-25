@@ -18,10 +18,17 @@ import {
   FileCheck,
   ChevronRight,
   ListChecks,
+  CheckCircle2,
   PlusCircle,
   Settings,
   Calendar,
   List,
+  FileBadge2,
+  FileSignature,
+  Wallet,
+  Boxes,
+  FileSpreadsheet,
+  FileSearch,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -36,16 +43,35 @@ type MenuItem = {
 
 export const menuItems: MenuItem[] = [
   {
-    title: 'Dashboard',
+    title: 'Ana Sayfa',
     href: '/dashboard',
     icon: LayoutDashboard,
     roles: ['PATRON', 'PERSONEL'] as const,
   },
   {
     title: 'Asansörler',
-    href: '/elevators',
     icon: Building2,
     roles: ['PATRON', 'PERSONEL'] as const,
+    children: [
+      {
+        title: 'Tüm Asansörler',
+        href: '/elevators',
+        icon: List,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Asansör Etiketleri',
+        href: '/elevator-labels',
+        icon: FileBadge2,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Asansör Sözleşmeleri',
+        href: '/elevator-contracts',
+        icon: FileSignature,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+    ],
   },
       {
         title: 'Bakım İşlemleri',
@@ -145,6 +171,79 @@ export const menuItems: MenuItem[] = [
     icon: Users,
     roles: ['PATRON'] as const,
   },
+  {
+    title: 'EDM Fatura İşlemleri',
+    icon: FileText,
+    roles: ['PATRON', 'PERSONEL'] as const,
+    children: [
+      {
+        title: 'Kesilecek Faturalar',
+        href: '/maintenance-completions',
+        icon: CheckCircle2,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Gelen Faturalar',
+        href: '/edm/invoices/incoming',
+        icon: List,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Giden Faturalar',
+        href: '/edm/invoices/outgoing',
+        icon: ListChecks,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Fatura Kes (Manuel)',
+        href: '/edm/invoices/manual',
+        icon: PlusCircle,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'VKN/TCKN Sorgula',
+        href: '/edm/vkn-validate',
+        icon: FileSearch,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Api Ayarları',
+        href: '/edm/settings',
+        icon: Settings,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+    ],
+  },
+  {
+    title: 'Tamamlanan Bakımlar',
+    href: '/maintenance-completions',
+    icon: CheckCircle2,
+    roles: ['PATRON', 'PERSONEL'] as const,
+  },
+  {
+    title: 'Ödeme Hareketleri',
+    href: '/payment-transactions',
+    icon: Wallet,
+    roles: ['PATRON', 'PERSONEL'] as const,
+  },
+  {
+    title: 'Stok Kartları',
+    href: '/stocks',
+    icon: Boxes,
+    roles: ['PATRON', 'PERSONEL'] as const,
+  },
+  {
+    title: 'Teklif Yönetimi',
+    href: '/proposals',
+    icon: FileSpreadsheet,
+    roles: ['PATRON', 'PERSONEL'] as const,
+  },
+  {
+    title: 'Durum Tespit Raporları',
+    href: '/reports/status-detections',
+    icon: FileSearch,
+    roles: ['PATRON', 'PERSONEL'] as const,
+  },
 ]
 
 interface NavigationContentProps {
@@ -165,20 +264,6 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
     }
     return null
   })
-
-  // Auto-expand menu if current route matches a child
-  useEffect(() => {
-    const currentPath = location.pathname
-    menuItems.forEach((item) => {
-      if (item.children) {
-        const hasActiveChild = item.children.some((child) => child.href === currentPath)
-        if (hasActiveChild && expandedMenu !== item.title) {
-          setExpandedMenu(item.title)
-          localStorage.setItem(STORAGE_KEY, item.title)
-        }
-      }
-    })
-  }, [location.pathname, expandedMenu])
 
   // Fetch counts for sidebar badges
   const { data: counts } = useQuery({
@@ -203,15 +288,55 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
     localStorage.setItem(STORAGE_KEY, newExpanded || '')
   }
 
+  const matchesPath = (href: string, pathname: string) => {
+    if (pathname === href) return true
+    if (href === '/elevator-labels' && pathname.startsWith('/elevator-labels/')) return true
+    if (href === '/elevator-contracts' && pathname.startsWith('/elevator-contracts/')) return true
+    return false
+  }
+
+  // Resolve one canonical active href to prevent multiple highlighted children.
+  const resolveActiveHref = (pathname: string): string | null => {
+    const hrefs = menuItems
+      .flatMap((item) => [item.href, ...(item.children?.map((child) => child.href) || [])])
+      .filter((href): href is string => Boolean(href))
+
+    let activeHref: string | null = null
+    let activeLength = -1
+
+    hrefs.forEach((href) => {
+      if (matchesPath(href, pathname) && href.length > activeLength) {
+        activeHref = href
+        activeLength = href.length
+      }
+    })
+
+    return activeHref
+  }
+
+  const activeHref = resolveActiveHref(location.pathname)
+
+  // Auto-expand only the matching parent group (single-open accordion behavior)
+  useEffect(() => {
+    const parentToOpen = menuItems.find((item) =>
+      item.children?.some((child) => (child.href ? matchesPath(child.href, location.pathname) : false))
+    )
+    const next = parentToOpen?.title || null
+    if (expandedMenu !== next) {
+      setExpandedMenu(next)
+      localStorage.setItem(STORAGE_KEY, next || '')
+    }
+  }, [location.pathname])
+
   const isChildActive = (children: MenuItem[]) => {
-    return children.some((child) => child.href === location.pathname)
+    return children.some((child) => (child.href ? matchesPath(child.href, location.pathname) : false))
   }
 
   const renderMenuItem = (item: MenuItem, level: number = 0) => {
     const Icon = item.icon
     const hasChildren = item.children && item.children.length > 0
     const isExpanded = expandedMenu === item.title
-    const isActive = item.href ? location.pathname === item.href : false
+    const isActive = item.href ? activeHref === item.href : false
     const hasActiveChild = hasChildren && isChildActive(item.children!)
 
     // Filter children by role
@@ -228,12 +353,16 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
       const totalBadgeCount = counts
         ? visibleChildren.reduce((sum, child) => {
             if (!child.href) return sum
-            if (child.href === '/maintenances/plan') return sum + (counts.maintenancePlansUpcoming || 0)
-            if (child.href === '/maintenances/completed') return sum + (counts.maintenanceSessionsCompleted || 0)
-            if (child.href === '/maintenances/upcoming') return sum + (counts.maintenancePlansUpcoming || 0)
-            if (child.href === '/maintenances/items') return sum + (counts.maintenanceTemplates || 0)
-            return sum
-          }, 0)
+          if (child.href === '/maintenances/plan') return sum + (counts.maintenancePlansUpcoming || 0)
+          if (child.href === '/maintenances/completed') return sum + (counts.maintenanceSessionsCompleted || 0)
+          if (child.href === '/maintenances/upcoming') return sum + (counts.maintenancePlansUpcoming || 0)
+          if (child.href === '/maintenances/items') return sum + (counts.maintenanceTemplates || 0)
+          if (child.href === '/elevators') return sum + (counts.elevators || 0)
+          if (child.href === '/elevator-labels') return sum + (counts.elevators || 0)
+          if (child.href === '/elevator-contracts') return sum + (counts.elevators || 0)
+          if (child.href === '/maintenance-completions') return sum + (counts.maintenanceSessionsCompleted || 0)
+          return sum
+        }, 0)
         : 0
 
       return (
@@ -241,15 +370,15 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
           <button
             onClick={() => toggleMenu(item.title)}
             className={cn(
-              'flex items-center justify-between w-full rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200 min-h-[44px]',
+              'flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors min-h-[40px] border',
               hasActiveChild
-                ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md border-l-4 border-teal-400'
-                : 'text-muted-foreground hover:bg-gradient-to-r hover:from-indigo-50 hover:to-teal-50 hover:text-indigo-700'
+                ? 'bg-slate-100 text-slate-900 border-slate-200'
+                : 'text-slate-600 border-transparent hover:bg-slate-100 hover:text-slate-900'
             )}
             style={{ paddingLeft: `${12 + level * 16}px` }}
           >
             <div className="flex items-center gap-3 flex-1">
-              <Icon className={cn('h-5 w-5 flex-shrink-0 transition-transform', hasActiveChild && 'scale-110')} />
+              <Icon className="h-5 w-5 flex-shrink-0" />
               {item.title}
             </div>
             <div className="flex items-center gap-2">
@@ -258,7 +387,7 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
                   className={cn(
                     'flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold',
                     hasActiveChild
-                      ? 'bg-white/20 text-white'
+                      ? 'bg-slate-300 text-slate-900'
                       : 'bg-indigo-500 text-white'
                   )}
                 >
@@ -274,7 +403,7 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
             </div>
           </button>
           {isExpanded && visibleChildren.length > 0 && (
-            <div className="mt-1 space-y-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+            <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-2 overflow-hidden animate-in slide-in-from-top-2 duration-200">
               {visibleChildren.map((child) => renderMenuItem(child, level + 1))}
             </div>
           )}
@@ -289,6 +418,10 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
       if (href === '/maintenances/list') return (counts.maintenancePlansUpcoming || 0) + (counts.maintenanceSessionsCompleted || 0)
       if (href === '/maintenances/items') return counts.maintenanceTemplates
       if (href === '/warnings') return counts.warnings
+      if (href === '/elevators') return counts.elevators
+      if (href === '/elevator-labels') return counts.elevators
+      if (href === '/elevator-contracts') return counts.elevators
+      if (href === '/maintenance-completions') return counts.maintenanceSessionsCompleted
       return undefined
     }
 
@@ -300,14 +433,14 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
         to={item.href!}
         onClick={handleNavClick}
         className={cn(
-          'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200 min-h-[44px] relative',
+          'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors min-h-[40px] relative border',
           isActive
-            ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md border-l-4 border-teal-400'
-            : 'text-muted-foreground hover:bg-gradient-to-r hover:from-indigo-50 hover:to-teal-50 hover:text-indigo-700'
+            ? 'bg-indigo-600 text-white border-indigo-600'
+            : 'text-slate-600 border-transparent hover:bg-slate-100 hover:text-slate-900'
         )}
         style={{ paddingLeft: `${12 + level * 16}px` }}
       >
-        <Icon className={cn('h-5 w-5 flex-shrink-0 transition-transform', isActive && 'scale-110')} />
+        <Icon className="h-5 w-5 flex-shrink-0" />
         <span className="flex-1">{item.title}</span>
         {badgeCount !== undefined && badgeCount > 0 && (
           <span
@@ -346,9 +479,9 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
 
 export function Sidebar() {
   return (
-    <aside className="hidden lg:flex h-screen w-64 flex-col border-r bg-gradient-to-b from-white to-indigo-50/30 shadow-lg">
-      <div className="flex h-16 items-center border-b border-indigo-200 bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 flex-shrink-0 shadow-md">
-        <h1 className="text-xl font-bold text-white drop-shadow-sm">Sara Asansör</h1>
+    <aside className="hidden lg:flex h-screen w-64 flex-col border-r bg-white">
+      <div className="flex h-16 items-center border-b border-slate-200 bg-indigo-700 px-6 flex-shrink-0">
+        <h1 className="text-xl font-bold text-white">Sara Asansör</h1>
       </div>
       <NavigationContent />
     </aside>

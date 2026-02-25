@@ -22,6 +22,19 @@ import { RevisionStandardsPage } from './pages/RevisionStandardsPage'
 import { MaintenancePage } from './pages/maintenance/MaintenancePage'
 import { MaintenanceItemsPage } from './pages/maintenance/MaintenanceItemsPage'
 import { MaintenancePlanningPage } from './pages/maintenance/MaintenancePlanningPage'
+import { ElevatorLabelsPage } from './modules/elevators/ElevatorLabelsPage'
+import { ElevatorLabelFormPage } from './modules/elevators/ElevatorLabelFormPage'
+import { ElevatorContractsPage } from './modules/elevators/ElevatorContractsPage'
+import { ElevatorContractFormPage } from './modules/elevators/ElevatorContractFormPage'
+import { EdmIncomingInvoicesPage, EdmOutgoingInvoicesPage } from './modules/edm/EdmInvoicesPage'
+import { EdmManualInvoicePage } from './modules/edm/EdmManualInvoicePage'
+import { EdmVknValidatePage } from './modules/edm/EdmVknValidatePage'
+import { EdmSettingsPage } from './modules/edm/EdmSettingsPage'
+import { MaintenanceCompletionsPage } from './modules/maintenance/MaintenanceCompletionsPage'
+import { PaymentTransactionsPage } from './modules/payments/PaymentTransactionsPage'
+import { StocksPage } from './modules/stocks/StocksPage'
+import { ProposalsPage } from './modules/proposals/ProposalsPage'
+import { StatusDetectionReportsPage } from './modules/reports/StatusDetectionReportsPage'
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -62,6 +75,23 @@ function AppRoutes() {
         <Route path="maintenances/list" element={<MaintenancePage />} />
         <Route path="maintenances/items" element={<MaintenanceItemsPage />} />
         <Route path="maintenances/plan" element={<MaintenancePlanningPage />} />
+        <Route path="maintenance-completions" element={<MaintenanceCompletionsPage />} />
+        <Route path="elevator-labels" element={<ElevatorLabelsPage />} />
+        <Route path="elevator-labels/new" element={<ElevatorLabelFormPage />} />
+        <Route path="elevator-labels/:id/edit" element={<ElevatorLabelFormPage />} />
+        <Route path="elevator-contracts" element={<ElevatorContractsPage />} />
+        <Route path="elevator-contracts/new" element={<ElevatorContractFormPage />} />
+        <Route path="elevator-contracts/:id/edit" element={<ElevatorContractFormPage />} />
+        <Route path="edm/invoices" element={<Navigate to="/edm/invoices/incoming" replace />} />
+        <Route path="edm/invoices/incoming" element={<EdmIncomingInvoicesPage />} />
+        <Route path="edm/invoices/outgoing" element={<EdmOutgoingInvoicesPage />} />
+        <Route path="edm/invoices/manual" element={<EdmManualInvoicePage />} />
+        <Route path="edm/vkn-validate" element={<EdmVknValidatePage />} />
+        <Route path="edm/settings" element={<EdmSettingsPage />} />
+        <Route path="payment-transactions" element={<PaymentTransactionsPage />} />
+        <Route path="stocks" element={<StocksPage />} />
+        <Route path="proposals" element={<ProposalsPage />} />
+        <Route path="reports/status-detections" element={<StatusDetectionReportsPage />} />
         <Route path="warnings" element={<WarningsPage />} />
         <Route path="parts" element={<PartsPage />} />
         <Route path="offers" element={<OffersPage />} />
@@ -97,4 +127,3 @@ function App() {
 }
 
 export default App
-
