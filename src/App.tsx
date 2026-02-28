@@ -7,6 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { TenantNotFoundScreen } from './components/TenantNotFoundScreen'
 import { GlobalApiErrorBanner } from './components/GlobalApiErrorBanner'
 import { Toaster } from './components/ui/toaster'
+import { MarketingSiteRoutes } from './pages/marketing/MarketingSite'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ElevatorsPage } from './pages/ElevatorsPage'
@@ -40,8 +41,12 @@ import { ProposalsPage } from './modules/proposals/ProposalsPage'
 import { StatusDetectionReportsPage } from './modules/reports/StatusDetectionReportsPage'
 
 function AppRoutes() {
-  const { bootStatus, tenant, errorMessage, recheckTenantHealth } = useTenant()
+  const { bootStatus, tenant, errorMessage, recheckTenantHealth, isMarketingHost } = useTenant()
   const { isAuthenticated, isLoading } = useAuth()
+
+  if (isMarketingHost) {
+    return <MarketingSiteRoutes />
+  }
 
   if (bootStatus === 'checking') {
     return (

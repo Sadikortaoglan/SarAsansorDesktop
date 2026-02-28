@@ -7,6 +7,8 @@ export interface TenantInfo {
   tenant: string
   hostname: string
   isDefaultTenant: boolean
+  requiresTenant: boolean
+  isMarketingHost: boolean
 }
 
 function isLocalHost(hostname: string): boolean {
@@ -25,17 +27,42 @@ export function detectTenantFromHostname(hostname = window.location.hostname): T
       tenant: DEFAULT_TENANT,
       hostname: normalizedHost,
       isDefaultTenant: true,
+      requiresTenant: false,
+      isMarketingHost: false,
+    }
+  }
+
+  if (
+    normalizedHost === 'asenovo.com' ||
+    normalizedHost === 'www.asenovo.com' ||
+    normalizedHost === 'asenovo.local' ||
+    normalizedHost === 'www.asenovo.local'
+  ) {
+    return {
+      tenant: DEFAULT_TENANT,
+      hostname: normalizedHost,
+      isDefaultTenant: true,
+      requiresTenant: false,
+      isMarketingHost: true,
     }
   }
 
   const parts = normalizedHost.split('.').filter(Boolean)
   const firstLabel = parts[0]
-  const resolvedTenant = firstLabel && firstLabel !== 'www' ? firstLabel : DEFAULT_TENANT
+  const isAsenovoSubdomain = normalizedHost.endsWith('.asenovo.com')
+  const isSaraLocalSubdomain = normalizedHost.endsWith('.sara.local')
+  const hasTenantSubdomain = firstLabel && firstLabel !== 'www'
+  const resolvedTenant =
+    (isAsenovoSubdomain || isSaraLocalSubdomain) && hasTenantSubdomain
+      ? firstLabel
+      : DEFAULT_TENANT
 
   return {
     tenant: resolvedTenant,
     hostname: normalizedHost,
     isDefaultTenant: resolvedTenant === DEFAULT_TENANT,
+    requiresTenant: (isAsenovoSubdomain || isSaraLocalSubdomain) && !!hasTenantSubdomain,
+    isMarketingHost: false,
   }
 }
 
@@ -69,4 +96,3 @@ export function syncTenantSession(tenant: string): void {
 
   localStorage.setItem(ACTIVE_TENANT_KEY, tenant)
 }
-

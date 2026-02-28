@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      allowedHosts: ['.sara.local', 'localhost', '127.0.0.1'],
+      allowedHosts: ['.sara.local', '.asenovo.local', 'asenovo.local', 'www.asenovo.local', 'localhost', '127.0.0.1'],
       proxy: {
         '/api': {
           target: devProxyTarget,

@@ -74,8 +74,13 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     syncTenantSession(tenantInfo.tenant)
+    if (!tenantInfo.requiresTenant) {
+      setBootStatus('ready')
+      setErrorMessage(undefined)
+      return
+    }
     void recheckTenantHealth()
-  }, [tenantInfo.tenant])
+  }, [tenantInfo.tenant, tenantInfo.requiresTenant])
 
   return (
     <TenantContext.Provider
@@ -83,6 +88,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         tenant: tenantInfo.tenant,
         hostname: tenantInfo.hostname,
         isDefaultTenant: tenantInfo.isDefaultTenant,
+        requiresTenant: tenantInfo.requiresTenant,
+        isMarketingHost: tenantInfo.isMarketingHost,
         bootStatus,
         errorMessage,
         recheckTenantHealth,
