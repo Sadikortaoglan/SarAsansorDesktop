@@ -363,6 +363,7 @@ export function MaintenancePage() {
       const response = await qrSessionService.validate({
         qrCode: finalCode,
         elevatorId: selectedPlan.elevatorId,
+        intent: 'START_MAINTENANCE',
       })
 
       // Verify elevator match
@@ -370,6 +371,16 @@ export function MaintenancePage() {
         toast({
           title: 'Hata',
           description: 'QR kodu bu asansör için geçerli değil',
+          variant: 'destructive',
+        })
+        setIsValidatingQR(false)
+        return
+      }
+
+      if (!response.qrSessionToken) {
+        toast({
+          title: 'Hata',
+          description: 'Bakım başlatma tokenı alınamadı',
           variant: 'destructive',
         })
         setIsValidatingQR(false)

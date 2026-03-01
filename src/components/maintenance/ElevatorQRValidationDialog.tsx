@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { QrCode, Smartphone, Monitor, Loader2 } from 'lucide-react'
-import { qrSessionService } from '@/services/qr-session.service'
+import { qrSessionService, type QRElevatorSummary, type QRValidateIntent } from '@/services/qr-session.service'
 import { MobileQrScanner } from '@/components/maintenance/MobileQrScanner'
 
 interface ElevatorQRValidationDialogProps {
@@ -14,7 +14,9 @@ interface ElevatorQRValidationDialogProps {
   onOpenChange: (open: boolean) => void
   elevatorId: number
   elevatorCode?: string // Elevator public code (kimlikNo)
-  onValidationSuccess: (qrSessionToken: string) => void // Changed: now returns session token
+  onValidationSuccess?: (qrSessionToken: string) => void // START_MAINTENANCE flow
+  intent?: QRValidateIntent
+  onViewElevatorInfo?: (summary: QRElevatorSummary) => void
 }
 
 /**
@@ -27,12 +29,15 @@ export function ElevatorQRValidationDialog({
   elevatorId,
   // elevatorCode, // Reserved for future use
   onValidationSuccess,
+  intent = 'START_MAINTENANCE',
+  onViewElevatorInfo,
 }: ElevatorQRValidationDialogProps) {
   const { toast } = useToast()
   const { hasRole } = useAuth()
   const [qrCode, setQrCode] = useState('')
   const [isValidating, setIsValidating] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [viewSummary, setViewSummary] = useState<QRElevatorSummary | null>(null)
 
   // Check if user is ADMIN (can bypass QR)
   const isAdmin = hasRole('PATRON') // PATRON = ADMIN in this system
@@ -56,6 +61,7 @@ export function ElevatorQRValidationDialog({
     if (!open) {
       setQrCode('')
       setIsValidating(false)
+      setViewSummary(null)
     }
   }, [open])
 
@@ -78,6 +84,7 @@ export function ElevatorQRValidationDialog({
       const response = await qrSessionService.validate({
         qrCode: finalCode,
         elevatorId: elevatorId, // Optional but helps backend
+        intent,
       })
 
       // Verify elevator match
@@ -91,13 +98,40 @@ export function ElevatorQRValidationDialog({
         return
       }
 
-      // Success: Pass session token to parent
+      if (intent === 'VIEW_ELEVATOR') {
+        const summary: QRElevatorSummary = response.elevatorSummary || {
+          elevatorId: response.elevatorId,
+          elevatorNo: response.elevatorNo || '',
+          buildingName: response.buildingName || '',
+          labelStatus: response.labelStatus || '',
+          lastMaintenanceDate: response.lastMaintenanceDate || null,
+        }
+
+        toast({
+          title: 'Başarılı',
+          description: 'Asansör bilgisi doğrulandı',
+        })
+
+        onViewElevatorInfo?.(summary)
+        setViewSummary(summary)
+        return
+      }
+
+      if (!response.qrSessionToken) {
+        toast({
+          title: 'Hata',
+          description: 'Bakım başlatma için oturum bilgisi alınamadı',
+          variant: 'destructive',
+        })
+        return
+      }
+
       toast({
         title: 'Başarılı',
         description: 'QR kodu doğrulandı',
       })
 
-      onValidationSuccess(response.qrSessionToken)
+      onValidationSuccess?.(response.qrSessionToken)
       onOpenChange(false)
 
     } catch (error: any) {
@@ -126,7 +160,7 @@ export function ElevatorQRValidationDialog({
       })
 
       // Success: Pass session token to parent, which will close QR modal and open maintenance modal
-      onValidationSuccess(response.qrSessionToken)
+      onValidationSuccess?.(response.qrSessionToken)
       // DO NOT call onOpenChange(false) here - onValidationSuccess callback handles modal closing
     } catch (error: any) {
       toast({
@@ -149,76 +183,89 @@ export function ElevatorQRValidationDialog({
             QR Kod Doğrulama
           </DialogTitle>
           <DialogDescription>
-            {isAdmin 
-              ? 'QR kodunu tarayın veya uzaktan başlatın'
-              : 'Bakım kaydı oluşturmak için QR kodunu tarayın'}
+            {intent === 'VIEW_ELEVATOR'
+              ? 'Asansör bilgisini görüntülemek için QR kodunu tarayın'
+              : isAdmin
+                ? 'QR kodunu tarayın veya uzaktan başlatın'
+                : 'Bakım kaydı oluşturmak için QR kodunu tarayın'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* QR Code Input */}
-          <div className="space-y-2">
-            <Label htmlFor="qrCode">QR Kod</Label>
-            <div className="flex gap-2">
-              <Input
-                id="qrCode"
-                placeholder="QR kodunu girin veya tarayın"
-                value={qrCode}
-                onChange={(e) => setQrCode(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && qrCode.trim()) {
-                    handleQRSubmit()
-                  }
-                }}
-                className="flex-1"
-                autoFocus
-              />
+          {intent === 'VIEW_ELEVATOR' && viewSummary ? (
+            <div className="rounded-md border p-4 space-y-2">
+              <p><span className="font-medium">Asansör No:</span> {viewSummary.elevatorNo || '-'}</p>
+              <p><span className="font-medium">Bina:</span> {viewSummary.buildingName || '-'}</p>
+              <p><span className="font-medium">Etiket Durumu:</span> {viewSummary.labelStatus || '-'}</p>
+              <p><span className="font-medium">Son Bakım:</span> {viewSummary.lastMaintenanceDate || '-'}</p>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* QR Code Input */}
+              <div className="space-y-2">
+                <Label htmlFor="qrCode">QR Kod</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="qrCode"
+                    placeholder="QR kodunu girin veya tarayın"
+                    value={qrCode}
+                    onChange={(e) => setQrCode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && qrCode.trim()) {
+                        handleQRSubmit()
+                      }
+                    }}
+                    className="flex-1"
+                    autoFocus
+                  />
+                </div>
+              </div>
 
-          {isMobile && (
-            <MobileQrScanner
-              open={open}
-              enabled={!isValidating}
-              onDetected={(value) => {
-                console.log('[ElevatorQRValidationDialog] scan success callback')
-                setQrCode(value)
-                void handleQRSubmit(value)
-              }}
-            />
-          )}
+              {isMobile && (
+                <MobileQrScanner
+                  open={open}
+                  enabled={!isValidating}
+                  onDetected={(value) => {
+                    console.log('[ElevatorQRValidationDialog] scan success callback')
+                    setQrCode(value)
+                    void handleQRSubmit(value)
+                  }}
+                />
+              )}
 
-          {/* Device Info */}
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {isMobile ? (
-              <>
-                <Smartphone className="h-4 w-4" />
-                <span>Mobil cihaz: Kamerayı kullanabilirsiniz</span>
-              </>
-            ) : (
-              <>
-                <Monitor className="h-4 w-4" />
-                <span>Masaüstü: QR kodunu manuel girin</span>
-              </>
-            )}
-          </div>
+              {/* Device Info */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {isMobile ? (
+                  <>
+                    <Smartphone className="h-4 w-4" />
+                    <span>Mobil cihaz: Kamerayı kullanabilirsiniz</span>
+                  </>
+                ) : (
+                  <>
+                    <Monitor className="h-4 w-4" />
+                    <span>Masaüstü: QR kodunu manuel girin</span>
+                  </>
+                )}
+              </div>
 
-          {/* Admin Remote Start Button */}
-          {isAdmin && (
-            <div className="pt-2 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleRemoteStart}
-                className="w-full"
-              >
-                <Monitor className="h-4 w-4 mr-2" />
-                Uzaktan Başlat (QR Gerekmez)
-              </Button>
-              <p className="text-xs text-muted-foreground mt-1 text-center">
-                Admin olarak QR kodu olmadan başlatabilirsiniz
-              </p>
-            </div>
+              {/* Admin Remote Start Button */}
+              {intent === 'START_MAINTENANCE' && isAdmin && (
+                <div className="pt-2 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleRemoteStart}
+                    className="w-full"
+                  >
+                    <Monitor className="h-4 w-4 mr-2" />
+                    Uzaktan Başlat (QR Gerekmez)
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-1 text-center">
+                    Admin olarak QR kodu olmadan başlatabilirsiniz
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -226,28 +273,37 @@ export function ElevatorQRValidationDialog({
           <Button
             type="button"
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              if (intent === 'VIEW_ELEVATOR' && viewSummary) {
+                setViewSummary(null)
+                setQrCode('')
+                return
+              }
+              onOpenChange(false)
+            }}
             disabled={isValidating}
           >
-            İptal
+            {intent === 'VIEW_ELEVATOR' && viewSummary ? 'Yeniden Tara' : 'İptal'}
           </Button>
-          <Button
-            type="button"
-            onClick={() => {
-              void handleQRSubmit()
-            }}
-            disabled={!qrCode.trim() || isValidating}
-            className="bg-gradient-to-r from-indigo-500 to-indigo-600"
-          >
-            {isValidating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Doğrulanıyor...
-              </>
-            ) : (
-              'Doğrula'
-            )}
-          </Button>
+          {!(intent === 'VIEW_ELEVATOR' && viewSummary) ? (
+            <Button
+              type="button"
+              onClick={() => {
+                void handleQRSubmit()
+              }}
+              disabled={!qrCode.trim() || isValidating}
+              className="bg-gradient-to-r from-indigo-500 to-indigo-600"
+            >
+              {isValidating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Doğrulanıyor...
+                </>
+              ) : (
+                intent === 'VIEW_ELEVATOR' ? 'Bilgiyi Aç' : 'Doğrula'
+              )}
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

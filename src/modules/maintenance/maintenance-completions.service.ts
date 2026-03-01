@@ -17,8 +17,33 @@ export interface MaintenanceCompletion {
   note?: string
 }
 
+function isMissingEndpointError(error: any): boolean {
+  const status = error?.response?.status
+  const message = error?.response?.data?.message
+  return status === 404 && typeof message === 'string' && message.includes('No static resource')
+}
+
+function emptyPage<T>(page: number, size: number): SpringPage<T> {
+  return {
+    content: [],
+    totalPages: 0,
+    totalElements: 0,
+    size,
+    number: page,
+    first: true,
+    last: true,
+    numberOfElements: 0,
+    empty: true,
+  }
+}
+
 export const maintenanceCompletionsService = {
-  list(page: number, size: number, from?: string, to?: string): Promise<SpringPage<MaintenanceCompletion>> {
-    return getPage<MaintenanceCompletion>('/maintenance-completions', { page, size, from, to })
+  async list(page: number, size: number, from?: string, to?: string): Promise<SpringPage<MaintenanceCompletion>> {
+    try {
+      return await getPage<MaintenanceCompletion>('/maintenance-completions', { page, size, from, to })
+    } catch (error: any) {
+      if (isMissingEndpointError(error)) return emptyPage<MaintenanceCompletion>(page, size)
+      throw error
+    }
   },
 }

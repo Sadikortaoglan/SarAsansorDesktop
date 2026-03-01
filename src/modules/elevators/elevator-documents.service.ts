@@ -23,9 +23,34 @@ export interface ElevatorContract {
   filePath?: string
 }
 
+function isMissingEndpointError(error: any): boolean {
+  const status = error?.response?.status
+  const message = error?.response?.data?.message
+  return status === 404 && typeof message === 'string' && message.includes('No static resource')
+}
+
+function emptyPage<T>(page: number, size: number): SpringPage<T> {
+  return {
+    content: [],
+    totalPages: 0,
+    totalElements: 0,
+    size,
+    number: page,
+    first: true,
+    last: true,
+    numberOfElements: 0,
+    empty: true,
+  }
+}
+
 export const elevatorDocumentsService = {
-  getLabels(page: number, size: number, elevatorId?: number): Promise<SpringPage<ElevatorLabel>> {
-    return getPage<ElevatorLabel>('/elevator-labels', { page, size, elevatorId })
+  async getLabels(page: number, size: number, elevatorId?: number): Promise<SpringPage<ElevatorLabel>> {
+    try {
+      return await getPage<ElevatorLabel>('/elevator-labels', { page, size, elevatorId })
+    } catch (error: any) {
+      if (isMissingEndpointError(error)) return emptyPage<ElevatorLabel>(page, size)
+      throw error
+    }
   },
   createLabel(payload: ElevatorLabel, file?: File | null): Promise<ElevatorLabel> {
     return apiClient
@@ -41,8 +66,13 @@ export const elevatorDocumentsService = {
     return apiClient.delete(`/elevator-labels/${id}`).then(() => undefined)
   },
 
-  getContracts(page: number, size: number, elevatorId?: number): Promise<SpringPage<ElevatorContract>> {
-    return getPage<ElevatorContract>('/elevator-contracts', { page, size, elevatorId })
+  async getContracts(page: number, size: number, elevatorId?: number): Promise<SpringPage<ElevatorContract>> {
+    try {
+      return await getPage<ElevatorContract>('/elevator-contracts', { page, size, elevatorId })
+    } catch (error: any) {
+      if (isMissingEndpointError(error)) return emptyPage<ElevatorContract>(page, size)
+      throw error
+    }
   },
   createContract(payload: ElevatorContract, file?: File | null): Promise<ElevatorContract> {
     return apiClient

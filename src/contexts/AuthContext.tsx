@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { authService, type LoginRequest } from '@/services/auth.service'
 import { tokenStorage } from '@/lib/api'
+import { applyTenantTheme, extractTenantBrandColor } from '@/lib/theme'
 
 interface User {
   id: number
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]))
+        applyTenantTheme(extractTenantBrandColor(payload))
         setUser({
           id: payload.userId || payload.sub || 0,
           username: payload.username || payload.sub || '',
@@ -35,7 +37,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
       } catch (error) {
         tokenStorage.clearTokens()
+        applyTenantTheme(null)
       }
+    } else {
+      applyTenantTheme(null)
     }
     setIsLoading(false)
   }, [])
@@ -76,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!username && accessToken) {
         try {
           const payload = JSON.parse(atob(accessToken.split('.')[1]))
+          applyTenantTheme(extractTenantBrandColor(payload))
           username = payload.username || payload.sub || credentials.username
           role = payload.role || 'PERSONEL'
           userId = payload.userId || payload.sub || 0
@@ -83,7 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           username = credentials.username
           role = 'PERSONEL'
           userId = 0
+          applyTenantTheme(extractTenantBrandColor(user))
         }
+      } else {
+        applyTenantTheme(extractTenantBrandColor(user))
       }
 
       if (!username) {
@@ -109,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     tokenStorage.clearTokens()
+    applyTenantTheme(null)
     setUser(null)
     authService.logout()
   }
@@ -142,4 +152,3 @@ export function useAuth() {
   }
   return context
 }
-

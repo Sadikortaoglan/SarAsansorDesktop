@@ -39,6 +39,7 @@ import { PaymentTransactionsPage } from './modules/payments/PaymentTransactionsP
 import { StocksPage } from './modules/stocks/StocksPage'
 import { ProposalsPage } from './modules/proposals/ProposalsPage'
 import { StatusDetectionReportsPage } from './modules/reports/StatusDetectionReportsPage'
+import { QrCodesPage } from './modules/qr-codes/QrCodesPage'
 
 function AppRoutes() {
   const { bootStatus, tenant, errorMessage, recheckTenantHealth, isMarketingHost } = useTenant()
@@ -129,6 +130,7 @@ function AppRoutes() {
         <Route path="stocks" element={<StocksPage />} />
         <Route path="proposals" element={<ProposalsPage />} />
         <Route path="reports/status-detections" element={<StatusDetectionReportsPage />} />
+        <Route path="qr-codes" element={<QrCodesPage />} />
         <Route path="warnings" element={<WarningsPage />} />
         <Route path="parts" element={<PartsPage />} />
         <Route path="offers" element={<OffersPage />} />

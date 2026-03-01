@@ -1,0 +1,148 @@
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--header-border);
+}
+
+.topbar__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.topbar__menu-button {
+  height: 36px;
+  width: 36px;
+  border-radius: 8px;
+  color: var(--header-text-muted);
+  flex-shrink: 0;
+}
+
+.topbar__menu-button:hover {
+  background: var(--header-hover-bg);
+}
+
+.topbar__menu-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.topbar__text {
+  min-width: 0;
+}
+
+.topbar__title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--header-text);
+}
+
+.topbar__subtitle {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--header-text-muted);
+}
+
+.topbar__right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.topbar__action-button {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--header-action-border);
+  border-radius: 8px;
+  background: var(--header-action-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--header-action-text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.topbar__action-button:hover {
+  background: var(--header-action-bg-hover);
+  border-color: var(--color-primary-border);
+}
+
+.topbar__action-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--header-action-icon);
+}
+
+.topbar__action-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar__avatar {
+  width: 24px;
+  height: 24px;
+}
+
+.topbar__avatar-fallback {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+@media (min-width: 1024px) {
+  .topbar {
+    padding: 10px 20px;
+  }
+
+  .topbar__menu-button {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .topbar__left {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .topbar__title {
+    font-size: 22px;
+  }
+
+  .topbar__subtitle {
+    margin-top: 1px;
+  }
+
+  .topbar__right {
+    width: 100%;
+  }
+
+  .topbar__action-button {
+    width: 100%;
+    justify-content: center;
+  }
+}

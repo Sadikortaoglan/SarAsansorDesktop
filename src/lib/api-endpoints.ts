@@ -22,7 +22,7 @@ export const API_ENDPOINTS = {
     BASE: '/elevators',
     BY_ID: (id: number) => `/elevators/${id}`,
     QR: (id: number) => `/elevators/${id}/qr`,
-    QR_PDF: (id: number) => `/elevators/${id}/qr/pdf`,
+    QR_PDF: (id: number) => `/elevators/${id}/qr/download?${new URLSearchParams({ format: 'pdf' }).toString()}`,
     QR_URL: (id: number) => `/elevators/${id}/qr-url`,
   },
 

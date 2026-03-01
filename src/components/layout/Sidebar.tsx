@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useQuery } from '@tanstack/react-query'
@@ -29,9 +29,13 @@ import {
   Boxes,
   FileSpreadsheet,
   FileSearch,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { tokenStorage } from '@/lib/api'
+import './Sidebar.css'
 
 type MenuItem = {
   title: string
@@ -73,31 +77,31 @@ export const menuItems: MenuItem[] = [
       },
     ],
   },
+  {
+    title: 'Bakım İşlemleri',
+    icon: Wrench,
+    roles: ['PATRON', 'PERSONEL'] as const,
+    children: [
       {
-        title: 'Bakım İşlemleri',
-        icon: Wrench,
+        title: 'Bakım Planla',
+        href: '/maintenances/plan',
+        icon: Calendar,
         roles: ['PATRON', 'PERSONEL'] as const,
-        children: [
-          {
-            title: 'Bakım Planla',
-            href: '/maintenances/plan',
-            icon: Calendar,
-            roles: ['PATRON', 'PERSONEL'] as const,
-          },
-          {
-            title: 'Bakım Listesi',
-            href: '/maintenances/list',
-            icon: List,
-            roles: ['PATRON', 'PERSONEL'] as const,
-          },
-          {
-            title: 'Bakım Maddeleri Yönet',
-            href: '/maintenances/items',
-            icon: Settings,
-            roles: ['PATRON', 'PERSONEL'] as const,
-          },
-        ],
       },
+      {
+        title: 'Bakım Listesi',
+        href: '/maintenances/list',
+        icon: List,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Bakım Maddeleri Yönet',
+        href: '/maintenances/items',
+        icon: Settings,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+    ],
+  },
   {
     title: 'Uyarılar',
     href: '/warnings',
@@ -249,43 +253,274 @@ export const menuItems: MenuItem[] = [
 interface NavigationContentProps {
   onNavigate?: () => void
   className?: string
+  collapsed?: boolean
 }
 
-const STORAGE_KEY = 'sidebar-expanded-menu'
+interface TenantBrand {
+  name: string
+  subtitle: string
+  logoUrl?: string
+  initials: string
+}
 
-export function NavigationContent({ onNavigate, className }: NavigationContentProps) {
-  const { hasRole, logout } = useAuth()
-  const location = useLocation()
-  const [expandedMenu, setExpandedMenu] = useState<string | null>(() => {
-    // Load from localStorage on mount
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      return saved || null
-    }
+const toInitials = (name: string) => {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (words.length === 0) return 'TP'
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+  return `${words[0][0]}${words[1][0]}`.toUpperCase()
+}
+
+const fromHostnameTenant = () => {
+  if (typeof window === 'undefined') return null
+  const hostname = window.location.hostname.toLowerCase()
+  const [firstLabel] = hostname.split('.')
+  if (!firstLabel || firstLabel === 'localhost' || firstLabel === '127' || firstLabel === 'www') {
     return null
-  })
+  }
+  if (firstLabel === 'sara' || firstLabel === 'asenovo') {
+    return null
+  }
 
-  // Fetch counts for sidebar badges
-  const { data: counts } = useQuery({
-    queryKey: ['dashboard', 'counts'],
-    queryFn: () => dashboardService.getCounts(),
-    refetchInterval: 30000, // Refetch every 30 seconds
-  })
+  return firstLabel
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
 
-  const visibleItems = menuItems.filter((item) =>
-    item.roles.some((role) => hasRole(role))
-  )
+const safeJsonParse = (value: string | null) => {
+  if (!value) return null
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
 
-  const handleNavClick = () => {
-    if (onNavigate) {
-      onNavigate()
+const readFromStorage = () => {
+  if (typeof window === 'undefined') return null
+
+  const stores = [window.localStorage, window.sessionStorage]
+  for (const store of stores) {
+    const tenantName = store.getItem('tenantName') || store.getItem('tenant_name')
+    const tenantLogoUrl = store.getItem('tenantLogoUrl') || store.getItem('tenant_logo_url')
+    if (tenantName || tenantLogoUrl) {
+      return { name: tenantName, logoUrl: tenantLogoUrl }
+    }
+
+    const tenant = safeJsonParse(store.getItem('tenant'))
+    if (tenant && typeof tenant === 'object') {
+      const name = (tenant as any).name || (tenant as any).tenantName || (tenant as any).companyName
+      const logoUrl = (tenant as any).logoUrl || (tenant as any).logo || (tenant as any).tenantLogoUrl
+      if (name || logoUrl) return { name, logoUrl }
+    }
+
+    const userObjects = ['user', 'authUser', 'auth_user', 'currentUser']
+    for (const key of userObjects) {
+      const user = safeJsonParse(store.getItem(key))
+      if (user && typeof user === 'object') {
+        const tenantObj = (user as any).tenant
+        const name =
+          (user as any).tenantName ||
+          (user as any).companyName ||
+          (tenantObj && (tenantObj.name || tenantObj.tenantName || tenantObj.companyName))
+        const logoUrl =
+          (user as any).tenantLogoUrl ||
+          (user as any).logoUrl ||
+          (tenantObj && (tenantObj.logoUrl || tenantObj.logo || tenantObj.tenantLogoUrl))
+
+        if (name || logoUrl) {
+          return { name, logoUrl }
+        }
+      }
     }
   }
 
+  return null
+}
+
+const resolveTenantBrand = (userLike?: unknown): TenantBrand => {
+  const userObj = (userLike && typeof userLike === 'object') ? (userLike as any) : undefined
+  let name = ''
+  let logoUrl: string | undefined
+
+  name =
+    userObj?.tenantName ||
+    userObj?.companyName ||
+    userObj?.organizationName ||
+    userObj?.tenant?.name ||
+    ''
+
+  logoUrl =
+    userObj?.tenantLogoUrl ||
+    userObj?.logoUrl ||
+    userObj?.tenant?.logoUrl ||
+    userObj?.tenant?.logo ||
+    undefined
+
+  try {
+    const token = tokenStorage.getAccessToken()
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      const tenantObject = (payload?.tenant && typeof payload.tenant === 'object') ? payload.tenant : undefined
+
+      name =
+        payload?.tenantName ||
+        payload?.companyName ||
+        payload?.organizationName ||
+        tenantObject?.name ||
+        payload?.tenantDisplayName ||
+        ''
+
+      logoUrl =
+        payload?.tenantLogo ||
+        payload?.tenantLogoUrl ||
+        payload?.logoUrl ||
+        payload?.logo ||
+        tenantObject?.logoUrl ||
+        tenantObject?.logo ||
+        undefined
+    }
+  } catch {
+    // Keep safe fallbacks below for malformed/missing token payload.
+  }
+
+  if (!name || !logoUrl) {
+    const storageTenant = readFromStorage()
+    if (storageTenant) {
+      name = name || storageTenant.name || ''
+      logoUrl = logoUrl || storageTenant.logoUrl || undefined
+    }
+  }
+
+  if (!name) {
+    name = fromHostnameTenant() || 'Admin Panel'
+  }
+
+  const initials = toInitials(name || userObj?.username || 'AP')
+  return {
+    name,
+    subtitle: 'Yönetim Paneli',
+    logoUrl,
+    initials,
+  }
+}
+
+interface SidebarBadgeProps {
+  count?: number
+  active?: boolean
+}
+
+function SidebarBadge({ count, active = false }: SidebarBadgeProps) {
+  if (!count || count <= 0) {
+    return null
+  }
+
+  return (
+    <span className={cn('sidebar-badge', active && 'sidebar-badge--active')}>
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
+interface SidebarItemProps {
+  item: MenuItem
+  level?: number
+  active?: boolean
+  activeGroup?: boolean
+  expanded?: boolean
+  badgeCount?: number
+  onToggle?: () => void
+  onClick?: () => void
+  childrenContent?: ReactNode
+}
+
+function SidebarItem({
+  item,
+  level = 0,
+  active = false,
+  activeGroup = false,
+  expanded = false,
+  badgeCount,
+  onToggle,
+  onClick,
+  childrenContent,
+}: SidebarItemProps) {
+  const Icon = item.icon
+  const hasChildren = Boolean(item.children?.length)
+
+  const itemClasses = cn(
+    'sidebar-item',
+    level > 0 && 'sidebar-item--nested',
+    hasChildren && expanded && 'sidebar-item--expanded',
+    active && 'sidebar-item--active',
+    !active && activeGroup && 'sidebar-item--group-active'
+  )
+
+  if (hasChildren) {
+    return (
+      <div className="sidebar-group">
+        <button type="button" onClick={onToggle} className={itemClasses} title={item.title} aria-label={item.title}>
+          <span className="sidebar-item__main">
+            <Icon className="sidebar-item__icon" />
+            <span className="sidebar-item__title">{item.title}</span>
+          </span>
+          <span className="sidebar-item__end">
+            <SidebarBadge count={badgeCount} active={activeGroup} />
+            <ChevronRight className={cn('sidebar-arrow', expanded && 'sidebar-arrow--expanded')} />
+          </span>
+        </button>
+        <div className={cn('sidebar-accordion', expanded && 'sidebar-accordion--open')}>
+          <div className="sidebar-accordion__inner">{childrenContent}</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <NavLink to={item.href!} onClick={onClick} className={itemClasses} title={item.title} aria-label={item.title}>
+      <span className="sidebar-item__main">
+        <Icon className="sidebar-item__icon" />
+        <span className="sidebar-item__title">{item.title}</span>
+      </span>
+      <span className="sidebar-item__end">
+        <SidebarBadge count={badgeCount} active={active} />
+      </span>
+    </NavLink>
+  )
+}
+
+const STORAGE_KEY = 'sidebar-expanded-menu'
+const COLLAPSED_STORAGE_KEY = 'sidebar-collapsed'
+
+export function NavigationContent({ onNavigate, className, collapsed = false }: NavigationContentProps) {
+  const { hasRole, logout } = useAuth()
+  const location = useLocation()
+  const navRef = useRef<HTMLElement | null>(null)
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(STORAGE_KEY) || null
+    }
+    return null
+  })
+  const [isNavScrolled, setIsNavScrolled] = useState(false)
+
+  const { data: counts } = useQuery({
+    queryKey: ['dashboard', 'counts'],
+    queryFn: () => dashboardService.getCounts(),
+    refetchInterval: 30000,
+  })
+
+  const visibleItems = menuItems.filter((item) => item.roles.some((role) => hasRole(role)))
+
   const toggleMenu = (menuTitle: string) => {
-    const newExpanded = expandedMenu === menuTitle ? null : menuTitle
-    setExpandedMenu(newExpanded)
-    localStorage.setItem(STORAGE_KEY, newExpanded || '')
+    const nextExpanded = expandedMenu === menuTitle ? null : menuTitle
+    setExpandedMenu(nextExpanded)
+    localStorage.setItem(STORAGE_KEY, nextExpanded || '')
   }
 
   const matchesPath = (href: string, pathname: string) => {
@@ -295,7 +530,6 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
     return false
   }
 
-  // Resolve one canonical active href to prevent multiple highlighted children.
   const resolveActiveHref = (pathname: string): string | null => {
     const hrefs = menuItems
       .flatMap((item) => [item.href, ...(item.children?.map((child) => child.href) || [])])
@@ -316,161 +550,123 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
 
   const activeHref = resolveActiveHref(location.pathname)
 
-  // Auto-expand only the matching parent group (single-open accordion behavior)
   useEffect(() => {
     const parentToOpen = menuItems.find((item) =>
       item.children?.some((child) => (child.href ? matchesPath(child.href, location.pathname) : false))
     )
-    const next = parentToOpen?.title || null
-    if (expandedMenu !== next) {
-      setExpandedMenu(next)
-      localStorage.setItem(STORAGE_KEY, next || '')
+    const nextExpanded = parentToOpen?.title || null
+
+    if (expandedMenu !== nextExpanded) {
+      setExpandedMenu(nextExpanded)
+      localStorage.setItem(STORAGE_KEY, nextExpanded || '')
     }
   }, [location.pathname])
 
-  const isChildActive = (children: MenuItem[]) => {
-    return children.some((child) => (child.href ? matchesPath(child.href, location.pathname) : false))
+  useEffect(() => {
+    const element = navRef.current
+    if (!element) return
+
+    const handleScroll = () => {
+      setIsNavScrolled(element.scrollTop > 0)
+    }
+
+    handleScroll()
+    element.addEventListener('scroll', handleScroll, { passive: true })
+
+    return () => {
+      element.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
+
+  const getBadgeCount = (href: string): number | undefined => {
+    if (!counts) return undefined
+    if (href === '/maintenances/plan') return counts.maintenancePlansUpcoming
+    if (href === '/maintenances/list') {
+      return (counts.maintenancePlansUpcoming || 0) + (counts.maintenanceSessionsCompleted || 0)
+    }
+    if (href === '/maintenances/items') return counts.maintenanceTemplates
+    if (href === '/warnings') return counts.warnings
+    if (href === '/elevators') return counts.elevators
+    if (href === '/elevator-labels') return counts.elevators
+    if (href === '/elevator-contracts') return counts.elevators
+    if (href === '/maintenance-completions') return counts.maintenanceSessionsCompleted
+    return undefined
   }
 
-  const renderMenuItem = (item: MenuItem, level: number = 0) => {
-    const Icon = item.icon
-    const hasChildren = item.children && item.children.length > 0
+  const getParentBadgeCount = (children: MenuItem[]) => {
+    if (!counts) return 0
+
+    return children.reduce((sum, child) => {
+      if (!child.href) return sum
+      if (child.href === '/maintenances/plan') return sum + (counts.maintenancePlansUpcoming || 0)
+      if (child.href === '/maintenances/completed') return sum + (counts.maintenanceSessionsCompleted || 0)
+      if (child.href === '/maintenances/upcoming') return sum + (counts.maintenancePlansUpcoming || 0)
+      if (child.href === '/maintenances/items') return sum + (counts.maintenanceTemplates || 0)
+      if (child.href === '/elevators') return sum + (counts.elevators || 0)
+      if (child.href === '/elevator-labels') return sum + (counts.elevators || 0)
+      if (child.href === '/elevator-contracts') return sum + (counts.elevators || 0)
+      if (child.href === '/maintenance-completions') return sum + (counts.maintenanceSessionsCompleted || 0)
+      return sum
+    }, 0)
+  }
+
+  const renderMenuItem = (item: MenuItem, level = 0) => {
+    const hasChildren = Boolean(item.children?.length)
     const isExpanded = expandedMenu === item.title
     const isActive = item.href ? activeHref === item.href : false
-    const hasActiveChild = hasChildren && isChildActive(item.children!)
 
-    // Filter children by role
     const visibleChildren = hasChildren
       ? item.children!.filter((child) => child.roles.some((role) => hasRole(role)))
       : []
 
     if (hasChildren && visibleChildren.length === 0) {
-      return null // Don't render parent if no visible children
+      return null
     }
 
     if (hasChildren) {
-      // Calculate total badge count for parent menu (sum of all children)
-      const totalBadgeCount = counts
-        ? visibleChildren.reduce((sum, child) => {
-            if (!child.href) return sum
-          if (child.href === '/maintenances/plan') return sum + (counts.maintenancePlansUpcoming || 0)
-          if (child.href === '/maintenances/completed') return sum + (counts.maintenanceSessionsCompleted || 0)
-          if (child.href === '/maintenances/upcoming') return sum + (counts.maintenancePlansUpcoming || 0)
-          if (child.href === '/maintenances/items') return sum + (counts.maintenanceTemplates || 0)
-          if (child.href === '/elevators') return sum + (counts.elevators || 0)
-          if (child.href === '/elevator-labels') return sum + (counts.elevators || 0)
-          if (child.href === '/elevator-contracts') return sum + (counts.elevators || 0)
-          if (child.href === '/maintenance-completions') return sum + (counts.maintenanceSessionsCompleted || 0)
-          return sum
-        }, 0)
-        : 0
+      const hasActiveChild = visibleChildren.some((child) => (child.href ? activeHref === child.href : false))
+      const parentBadgeCount = getParentBadgeCount(visibleChildren)
 
       return (
-        <div key={item.title}>
-          <button
-            onClick={() => toggleMenu(item.title)}
-            className={cn(
-              'flex items-center justify-between w-full rounded-md px-3 py-2.5 text-sm font-medium transition-colors min-h-[40px] border',
-              hasActiveChild
-                ? 'bg-slate-100 text-slate-900 border-slate-200'
-                : 'text-slate-600 border-transparent hover:bg-slate-100 hover:text-slate-900'
-            )}
-            style={{ paddingLeft: `${12 + level * 16}px` }}
-          >
-            <div className="flex items-center gap-3 flex-1">
-              <Icon className="h-5 w-5 flex-shrink-0" />
-              {item.title}
-            </div>
-            <div className="flex items-center gap-2">
-              {totalBadgeCount > 0 && (
-                <span
-                  className={cn(
-                    'flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold',
-                    hasActiveChild
-                      ? 'bg-slate-300 text-slate-900'
-                      : 'bg-indigo-500 text-white'
-                  )}
-                >
-                  {totalBadgeCount > 99 ? '99+' : totalBadgeCount}
-                </span>
-              )}
-              <ChevronRight
-                className={cn(
-                  'h-4 w-4 flex-shrink-0 transition-transform duration-200',
-                  isExpanded && 'rotate-90'
-                )}
-              />
-            </div>
-          </button>
-          {isExpanded && visibleChildren.length > 0 && (
-            <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-2 overflow-hidden animate-in slide-in-from-top-2 duration-200">
-              {visibleChildren.map((child) => renderMenuItem(child, level + 1))}
-            </div>
-          )}
-        </div>
+        <SidebarItem
+          key={item.title}
+          item={item}
+          level={level}
+          activeGroup={hasActiveChild}
+          expanded={isExpanded}
+          badgeCount={parentBadgeCount}
+          onToggle={() => toggleMenu(item.title)}
+          childrenContent={visibleChildren.map((child) => renderMenuItem(child, level + 1))}
+        />
       )
     }
 
-    // Get badge count for specific menu items
-    const getBadgeCount = (href: string): number | undefined => {
-      if (!counts) return undefined
-      if (href === '/maintenances/plan') return counts.maintenancePlansUpcoming
-      if (href === '/maintenances/list') return (counts.maintenancePlansUpcoming || 0) + (counts.maintenanceSessionsCompleted || 0)
-      if (href === '/maintenances/items') return counts.maintenanceTemplates
-      if (href === '/warnings') return counts.warnings
-      if (href === '/elevators') return counts.elevators
-      if (href === '/elevator-labels') return counts.elevators
-      if (href === '/elevator-contracts') return counts.elevators
-      if (href === '/maintenance-completions') return counts.maintenanceSessionsCompleted
-      return undefined
-    }
-
-    const badgeCount = getBadgeCount(item.href!)
-
     return (
-      <NavLink
+      <SidebarItem
         key={item.href}
-        to={item.href!}
-        onClick={handleNavClick}
-        className={cn(
-          'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors min-h-[40px] relative border',
-          isActive
-            ? 'bg-indigo-600 text-white border-indigo-600'
-            : 'text-slate-600 border-transparent hover:bg-slate-100 hover:text-slate-900'
-        )}
-        style={{ paddingLeft: `${12 + level * 16}px` }}
-      >
-        <Icon className="h-5 w-5 flex-shrink-0" />
-        <span className="flex-1">{item.title}</span>
-        {badgeCount !== undefined && badgeCount > 0 && (
-          <span
-            className={cn(
-              'flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold',
-              isActive
-                ? 'bg-white/20 text-white'
-                : 'bg-indigo-500 text-white'
-            )}
-          >
-            {badgeCount > 99 ? '99+' : badgeCount}
-          </span>
-        )}
-      </NavLink>
+        item={item}
+        level={level}
+        active={isActive}
+        badgeCount={getBadgeCount(item.href!)}
+        onClick={onNavigate}
+      />
     )
   }
 
   return (
-    <div className={cn('flex flex-col h-full', className)}>
-      <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
-        {visibleItems.map((item) => renderMenuItem(item))}
+    <div className={cn('sidebar-nav-shell', collapsed && 'sidebar-nav-shell--collapsed', className)}>
+      <nav
+        ref={navRef}
+        className={cn('sidebar-nav', isNavScrolled && 'sidebar-nav--scrolled')}
+        aria-label="Ana Navigasyon"
+      >
+        <p className="sidebar-section-title">Navigasyon</p>
+        <div className="sidebar-menu-list">{visibleItems.map((item) => renderMenuItem(item))}</div>
       </nav>
-      <div className="border-t p-4">
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-3 min-h-[44px]"
-          onClick={logout}
-        >
-          <LogOut className="h-5 w-5" />
-          Çıkış Yap
+      <div className="sidebar-footer">
+        <Button variant="ghost" className="sidebar-logout" onClick={logout}>
+          <LogOut className="sidebar-item__icon" />
+          <span>Çıkış Yap</span>
         </Button>
       </div>
     </div>
@@ -478,12 +674,67 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
 }
 
 export function Sidebar() {
+  const { user } = useAuth()
+  const tenantBrand = useMemo(() => resolveTenantBrand(user), [user])
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem(COLLAPSED_STORAGE_KEY) === '1'
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mediaQuery = window.matchMedia('(min-width: 1024px)')
+
+    const syncWithViewport = (isDesktop: boolean) => {
+      if (!isDesktop) {
+        setCollapsed(false)
+        return
+      }
+      setCollapsed(localStorage.getItem(COLLAPSED_STORAGE_KEY) === '1')
+    }
+
+    syncWithViewport(mediaQuery.matches)
+    const onChange = (event: MediaQueryListEvent) => syncWithViewport(event.matches)
+    mediaQuery.addEventListener('change', onChange)
+
+    return () => mediaQuery.removeEventListener('change', onChange)
+  }, [])
+
+  const toggleCollapsed = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    localStorage.setItem(COLLAPSED_STORAGE_KEY, next ? '1' : '0')
+  }
+
   return (
-    <aside className="hidden lg:flex h-screen w-64 flex-col border-r bg-white">
-      <div className="flex h-16 items-center border-b border-slate-200 bg-indigo-700 px-6 flex-shrink-0">
-        <h1 className="text-xl font-bold text-white">Sara Asansör</h1>
+    <aside className={cn('sidebar-shell', collapsed && 'sidebar-shell--collapsed')} aria-label="Sidebar">
+      <div className="sidebar-brand">
+        {tenantBrand.logoUrl ? (
+          <img
+            src={tenantBrand.logoUrl}
+            alt={tenantBrand.name}
+            className="sidebar-brand__logo"
+          />
+        ) : (
+          <div className="sidebar-brand__avatar" aria-hidden="true">
+            {tenantBrand.initials}
+          </div>
+        )}
+        <div className="sidebar-brand__text">
+          <h1 className="sidebar-brand__title">{tenantBrand.name}</h1>
+          <p className="sidebar-brand__subtitle">{tenantBrand.subtitle}</p>
+        </div>
+        <button
+          type="button"
+          className="sidebar-collapse-toggle"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? 'Sidebarı Genişlet' : 'Sidebarı Daralt'}
+          title={collapsed ? 'Genişlet' : 'Daralt'}
+        >
+          {collapsed ? <PanelLeftOpen className="sidebar-collapse-toggle__icon" /> : <PanelLeftClose className="sidebar-collapse-toggle__icon" />}
+        </button>
       </div>
-      <NavigationContent />
+      <NavigationContent collapsed={collapsed} />
     </aside>
   )
 }

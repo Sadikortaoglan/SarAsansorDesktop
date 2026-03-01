@@ -51,9 +51,9 @@ export function MainLayout() {
       
       {/* Mobile Drawer */}
       <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-        <SheetContent side="left" className="w-[280px] p-0 sm:w-[300px]">
-          <SheetHeader className="border-b px-6 py-4">
-            <SheetTitle className="text-xl font-bold text-primary">Sara Asansör</SheetTitle>
+        <SheetContent side="left" className="w-[260px] max-w-[86vw] p-0">
+          <SheetHeader className="border-b border-slate-200 bg-slate-100 px-4 py-3">
+            <SheetTitle className="text-sm font-medium text-slate-900">Sara Asansör</SheetTitle>
           </SheetHeader>
           <NavigationContent onNavigate={() => setIsDrawerOpen(false)} />
         </SheetContent>
@@ -61,4 +61,3 @@ export function MainLayout() {
     </div>
   )
 }
-

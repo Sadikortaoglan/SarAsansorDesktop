@@ -9,54 +9,78 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { LogOut, Menu } from 'lucide-react'
+import { LogOut, Menu, UserRound } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { menuItems } from './Sidebar'
+import './TopBar.css'
 
 interface TopBarProps {
   onMenuClick?: () => void
+}
+
+const subtitleByTitle: Record<string, string> = {
+  Dashboard: 'Operasyon özetini ve güncel metrikleri takip edin.',
+  'Ana Sayfa': 'Operasyon özetini ve güncel metrikleri takip edin.',
+  Asansörler: 'Asansör kayıtlarını görüntüleyin ve yönetin.',
+  Denetimler: 'Denetim kayıtlarını inceleyin ve güncelleyin.',
+  'Revizyon Teklifleri': 'Teklif süreçlerini düzenli ve hızlı yönetin.',
+}
+
+function resolveCurrentPage(pathname: string) {
+  const allItems = menuItems.flatMap((item) => [item, ...(item.children || [])])
+
+  let current = allItems.find((item) => item.href === pathname)
+  if (current) return current
+
+  current = allItems
+    .filter((item) => item.href && pathname.startsWith(`${item.href}/`))
+    .sort((a, b) => (b.href?.length || 0) - (a.href?.length || 0))[0]
+
+  return current || null
 }
 
 export function TopBar({ onMenuClick }: TopBarProps) {
   const { user, logout } = useAuth()
   const location = useLocation()
 
-  // Find current page title
-  const currentPage = menuItems.find((item) => item.href === location.pathname)
+  const currentPage = resolveCurrentPage(location.pathname)
   const pageTitle = currentPage?.title || 'Yönetim Paneli'
+  const pageSubtitle = subtitleByTitle[pageTitle] || 'Kayıtları görüntüleyin, filtreleyin ve yönetim aksiyonlarını uygulayın.'
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-gradient-to-r from-white via-indigo-50/50 to-white px-4 lg:px-6 shadow-sm">
-      <div className="flex items-center gap-4">
+    <header className="topbar">
+      <div className="topbar__left">
         <Button
           variant="ghost"
           size="icon"
-          className="lg:hidden hover:bg-indigo-100"
+          className="topbar__menu-button"
           onClick={onMenuClick}
           aria-label="Menu"
         >
-          <Menu className="h-5 w-5 text-indigo-700" />
+          <Menu className="topbar__menu-icon" />
         </Button>
-        <h2 className="text-base font-semibold lg:text-lg text-indigo-900">{pageTitle}</h2>
+        <div className="topbar__text">
+          <h1 className="topbar__title">{pageTitle}</h1>
+          <p className="topbar__subtitle">{pageSubtitle}</p>
+        </div>
       </div>
-      <div className="flex items-center gap-2 lg:gap-4">
+
+      <div className="topbar__right">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-lg p-2 hover:bg-accent">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="text-xs">
-                  {user?.username.substring(0, 2).toUpperCase() || 'U'}
+            <button className="topbar__action-button" type="button">
+              <UserRound className="topbar__action-icon" />
+              <span className="topbar__action-label">{user?.username || 'Profil'}</span>
+              <Avatar className="topbar__avatar">
+                <AvatarFallback className="topbar__avatar-fallback">
+                  {user?.username?.substring(0, 2).toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <div className="hidden text-left md:block">
-                <div className="text-sm font-medium">{user?.username}</div>
-                <div className="text-xs text-muted-foreground">{user?.role}</div>
-              </div>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
-              <div className="flex flex-col space-y-1">
+              <div className="space-y-1">
                 <p className="text-sm font-medium leading-none">{user?.username}</p>
                 <p className="text-xs leading-none text-muted-foreground">{user?.role}</p>
               </div>
@@ -72,4 +96,3 @@ export function TopBar({ onMenuClick }: TopBarProps) {
     </header>
   )
 }
-
