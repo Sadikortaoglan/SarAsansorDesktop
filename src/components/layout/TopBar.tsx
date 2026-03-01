@@ -22,7 +22,8 @@ export function TopBar({ onMenuClick }: TopBarProps) {
   const location = useLocation()
 
   // Find current page title
-  const currentPage = menuItems.find((item) => item.href === location.pathname)
+  const flatItems = menuItems.flatMap((item) => [item, ...(item.children || [])])
+  const currentPage = flatItems.find((item) => item.href === location.pathname)
   const pageTitle = currentPage?.title || 'Yönetim Paneli'
 
   return (
@@ -72,4 +73,3 @@ export function TopBar({ onMenuClick }: TopBarProps) {
     </header>
   )
 }
-
