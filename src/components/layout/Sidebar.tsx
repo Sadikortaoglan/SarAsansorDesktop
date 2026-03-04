@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useQuery } from '@tanstack/react-query'
 import { dashboardService } from '@/services/dashboard.service'
+import type { AnyRole } from '@/lib/roles'
 import {
   LayoutDashboard,
   Building2,
@@ -37,8 +38,9 @@ type MenuItem = {
   title: string
   href?: string
   icon: React.ComponentType<{ className?: string }>
-  roles: readonly ('PATRON' | 'PERSONEL')[]
+  roles: readonly AnyRole[]
   children?: MenuItem[]
+  disabled?: boolean
 }
 
 export const menuItems: MenuItem[] = [
@@ -70,6 +72,49 @@ export const menuItems: MenuItem[] = [
         href: '/elevator-contracts',
         icon: FileSignature,
         roles: ['PATRON', 'PERSONEL'] as const,
+      },
+    ],
+  },
+  {
+    title: 'Cari Kartlar',
+    icon: Users,
+    roles: ['PATRON', 'PERSONEL', 'CARI_USER'] as const,
+    children: [
+      {
+        title: 'Tüm Cariler',
+        href: '/b2bunits',
+        icon: List,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Borçlu Cariler',
+        icon: AlertCircle,
+        roles: ['PATRON', 'PERSONEL'] as const,
+        disabled: true,
+      },
+      {
+        title: 'Alacaklı Cariler',
+        icon: AlertCircle,
+        roles: ['PATRON', 'PERSONEL'] as const,
+        disabled: true,
+      },
+      {
+        title: 'Cari Gruplar',
+        href: '/b2bunit-groups',
+        icon: Settings,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Para Birimleri',
+        href: '/currencies',
+        icon: Wallet,
+        roles: ['PATRON', 'PERSONEL'] as const,
+      },
+      {
+        title: 'Cari Bilgilerim',
+        href: '/b2bunits/me',
+        icon: FileSearch,
+        roles: ['CARI_USER'] as const,
       },
     ],
   },
@@ -426,6 +471,22 @@ export function NavigationContent({ onNavigate, className }: NavigationContentPr
     }
 
     const badgeCount = getBadgeCount(item.href!)
+
+    if (item.disabled || !item.href) {
+      return (
+        <div
+          key={item.title}
+          className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-slate-400 border border-transparent"
+          style={{ paddingLeft: `${12 + level * 16}px` }}
+        >
+          <Icon className="h-5 w-5 flex-shrink-0" />
+          <span className="flex-1">{item.title}</span>
+          <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+            Yakında
+          </span>
+        </div>
+      )
+    }
 
     return (
       <NavLink
