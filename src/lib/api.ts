@@ -76,7 +76,13 @@ apiClient.interceptors.request.use(
     } else {
       config.headers['Content-Type'] = 'application/json'
     }
-    if (!config.headers['Accept']) {
+    const headers = config.headers as any
+    const hasAcceptHeader =
+      headers?.Accept != null ||
+      headers?.accept != null ||
+      (typeof headers?.get === 'function' && headers.get('Accept') != null)
+
+    if (!hasAcceptHeader) {
       config.headers['Accept'] = 'application/json'
     }
     

@@ -46,6 +46,7 @@ import { B2BUnitMePage } from './modules/cari/B2BUnitMePage'
 import { FacilitiesPage } from './modules/facilities/FacilitiesPage'
 import { FacilityFormPage } from './modules/facilities/FacilityFormPage'
 import { ForbiddenPage } from './pages/ForbiddenPage'
+import { QrCodesPage } from './modules/qr-codes/QrCodesPage'
 
 function AppRoutes() {
   const { bootStatus, tenant, errorMessage, recheckTenantHealth, isMarketingHost } = useTenant()
@@ -179,6 +180,7 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+        <Route path="qr-codes" element={<QrCodesPage />} />
         <Route path="warnings" element={<WarningsPage />} />
         <Route path="parts" element={<PartsPage />} />
         <Route path="offers" element={<OffersPage />} />

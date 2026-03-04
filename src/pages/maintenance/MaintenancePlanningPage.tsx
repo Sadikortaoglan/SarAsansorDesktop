@@ -1763,6 +1763,7 @@ export function MaintenancePlanningPage() {
           }}
           elevatorId={selectedPlanForQR.elevatorId}
           elevatorCode={selectedPlanForQR.elevatorCode || selectedPlanForQR.elevatorName || ''}
+          intent="START_MAINTENANCE"
           onValidationSuccess={(qrSessionToken) => {
             // QR validation succeeded (for both technician QR and admin remote start)
             // Set token FIRST, then close QR modal, then open maintenance modal

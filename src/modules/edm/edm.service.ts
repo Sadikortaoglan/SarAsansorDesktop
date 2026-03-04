@@ -1,6 +1,7 @@
 import apiClient from '@/lib/api'
 import { unwrapResponse, type ApiResponse } from '@/lib/api-response'
 import { getPage } from '@/modules/shared/api'
+import type { SpringPage } from '@/modules/shared/types'
 
 export interface InvoiceDto {
   id?: number
@@ -37,17 +38,47 @@ export interface VknValidationResponse {
   message: string
 }
 
+function isMissingEndpointError(error: any): boolean {
+  const status = error?.response?.status
+  const message = error?.response?.data?.message
+  return status === 404 && typeof message === 'string' && message.includes('No static resource')
+}
+
+function emptyPage<T>(page: number, size: number): SpringPage<T> {
+  return {
+    content: [],
+    totalPages: 0,
+    totalElements: 0,
+    size,
+    number: page,
+    first: true,
+    last: true,
+    numberOfElements: 0,
+  empty: true,
+  }
+}
+
 interface EInvoiceQueryResponse {
   eInvoiceUser: boolean
   message: string
 }
 
 export const edmService = {
-  incoming(page: number, size: number, params: { startDate?: string; endDate?: string; status?: string }) {
-    return getPage<InvoiceDto>('/edm/invoices/incoming', { page, size, ...params })
+  async incoming(page: number, size: number, params: { startDate?: string; endDate?: string; status?: string }) {
+    try {
+      return await getPage<InvoiceDto>('/edm/invoices/incoming', { page, size, ...params })
+    } catch (error: any) {
+      if (isMissingEndpointError(error)) return emptyPage<InvoiceDto>(page, size)
+      throw error
+    }
   },
-  outgoing(page: number, size: number, params: { startDate?: string; endDate?: string; status?: string }) {
-    return getPage<InvoiceDto>('/edm/invoices/outgoing', { page, size, ...params })
+  async outgoing(page: number, size: number, params: { startDate?: string; endDate?: string; status?: string }) {
+    try {
+      return await getPage<InvoiceDto>('/edm/invoices/outgoing', { page, size, ...params })
+    } catch (error: any) {
+      if (isMissingEndpointError(error)) return emptyPage<InvoiceDto>(page, size)
+      throw error
+    }
   },
   createManual(payload: InvoiceDto) {
     return apiClient.post<ApiResponse<InvoiceDto>>('/edm/invoices/manual', payload).then((r) => unwrapResponse(r.data))
@@ -79,8 +110,23 @@ export const edmService = {
         message: response.message || 'Sorgu tamamlandı.',
       }))
   },
-  getSettings() {
-    return apiClient.get<ApiResponse<EdmSettingDto>>('/edm/settings').then((r) => unwrapResponse(r.data))
+  async getSettings() {
+    try {
+      return await apiClient.get<ApiResponse<EdmSettingDto>>('/edm/settings').then((r) => unwrapResponse(r.data))
+    } catch (error: any) {
+      if (isMissingEndpointError(error)) {
+        return {
+          username: '',
+          password: '',
+          email: '',
+          invoiceSeriesEarchive: '',
+          invoiceSeriesEfatura: '',
+          mode: 'PRODUCTION',
+          passwordConfigured: false,
+        } as EdmSettingDto
+      }
+      throw error
+    }
   },
   saveSettings(payload: EdmSettingDto) {
     return apiClient.put<ApiResponse<EdmSettingDto>>('/edm/settings', payload).then((r) => unwrapResponse(r.data))

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { authService, type LoginRequest } from '@/services/auth.service'
 import { tokenStorage } from '@/lib/api'
+import { applyTenantTheme, extractTenantBrandColor } from '@/lib/theme'
 import {
   getDefaultRouteForRole,
   hasAnyRole as roleHasAnyRole,
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (token) {
       const payload = decodeJwtPayload(token)
       if (payload) {
+        applyTenantTheme(extractTenantBrandColor(payload as Record<string, any>))
         setUser({
           id: Number(payload.userId || payload.sub || 0),
           username: String(payload.username || payload.sub || ''),
@@ -61,7 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
       } else {
         tokenStorage.clearTokens()
+        applyTenantTheme(null)
       }
+    } else {
+      applyTenantTheme(null)
     }
     setIsLoading(false)
   }, [])
@@ -75,6 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tokenStorage.setTokens(response.accessToken, response.refreshToken || response.accessToken)
 
     const payload = decodeJwtPayload(response.accessToken)
+    applyTenantTheme(extractTenantBrandColor((payload as Record<string, any>) || (response.user as any)))
+
     const userData: User = {
       id: response.user.id || Number(payload?.userId || payload?.sub || 0),
       username: response.user.username || String(payload?.username || payload?.sub || credentials.username),
@@ -93,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     tokenStorage.clearTokens()
+    applyTenantTheme(null)
     setUser(null)
     authService.logout()
   }

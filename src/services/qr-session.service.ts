@@ -4,13 +4,29 @@ import { unwrapResponse, type ApiResponse } from '@/lib/api-response'
 export interface QRValidateRequest {
   qrCode: string
   elevatorId?: number // Optional, if already known
+  intent?: QRValidateIntent
+}
+
+export type QRValidateIntent = 'VIEW_ELEVATOR' | 'START_MAINTENANCE'
+
+export interface QRElevatorSummary {
+  elevatorId: number
+  elevatorNo: string
+  buildingName: string
+  labelStatus: string
+  lastMaintenanceDate: string | null
 }
 
 export interface QRValidateResponse {
   success: boolean
-  qrSessionToken: string
   elevatorId: number
-  expiresAt: string // ISO 8601
+  qrSessionToken?: string
+  expiresAt?: string // ISO 8601
+  elevatorSummary?: QRElevatorSummary
+  elevatorNo?: string
+  buildingName?: string
+  labelStatus?: string
+  lastMaintenanceDate?: string | null
 }
 
 export interface QRRemoteStartRequest {
@@ -33,7 +49,10 @@ export const qrSessionService = {
   validate: async (request: QRValidateRequest): Promise<QRValidateResponse> => {
     const { data } = await apiClient.post<ApiResponse<QRValidateResponse>>(
       '/qr/validate',
-      request
+      {
+        ...request,
+        intent: request.intent || 'START_MAINTENANCE',
+      }
     )
     return unwrapResponse(data)
   },

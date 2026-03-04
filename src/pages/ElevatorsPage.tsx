@@ -341,6 +341,7 @@ export function ElevatorsPage() {
           }}
           elevatorId={elevatorForQR.id}
           elevatorCode={elevatorForQR.kimlikNo}
+          intent="START_MAINTENANCE"
           onValidationSuccess={(qrSessionToken) => {
             setValidatedQRSessionToken(qrSessionToken)
             setIsQRValidationDialogOpen(false)
@@ -882,4 +883,3 @@ function ElevatorFormDialog({
     </DialogContent>
   )
 }
-
