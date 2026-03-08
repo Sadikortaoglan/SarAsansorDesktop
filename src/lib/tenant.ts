@@ -11,7 +11,7 @@ export interface TenantInfo {
   isMarketingHost: boolean
 }
 
-const LOCAL_ROOT_DOMAINS = ['asenovo.local', 'sara.local']
+const LOCAL_ROOT_DOMAINS = ['asenovo.local']
 const PROD_ROOT_DOMAINS = ['asenovo.com']
 const RESERVED_SUBDOMAINS = new Set(['www', 'api'])
 

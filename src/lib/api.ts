@@ -320,7 +320,7 @@ apiClient.interceptors.response.use(
       emitUiApiError({
         code: 'RATE_LIMIT',
         status: 429,
-        message: 'Çok fazla istek gönderildi. Lütfen kısa süre sonra tekrar deneyin.',
+        message: 'Too many requests. Please try again later.',
       })
     }
     
