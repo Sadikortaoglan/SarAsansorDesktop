@@ -12,9 +12,10 @@ import {
   type B2BUnitDetailMenuKey,
 } from './cari.service'
 import {
-  B2BUnitDetailAccountTransactionsPanel,
   B2BUnitDetailCollectionPanel,
   B2BUnitDetailFilterPanel,
+  B2BUnitManualCreditPanel,
+  B2BUnitManualDebitPanel,
   B2BUnitPurchaseInvoicePanel,
   B2BUnitDetailPaymentPanel,
   B2BUnitDetailReportingPanel,
@@ -30,11 +31,21 @@ const FALLBACK_MENUS: B2BUnitDetailMenuItem[] = [
   { key: 'reporting', label: 'Raporlama' },
 ]
 
-type DetailPanelKey = B2BUnitDetailMenuKey | 'purchaseInvoice' | 'salesInvoice'
+type DetailPanelKey =
+  | B2BUnitDetailMenuKey
+  | 'purchaseInvoice'
+  | 'salesInvoice'
+  | 'manualDebit'
+  | 'manualCredit'
 
 const INVOICE_SUBMENU_LABELS: Record<'purchaseInvoice' | 'salesInvoice', string> = {
   purchaseInvoice: 'Alış Yap',
   salesInvoice: 'Satış Yap',
+}
+
+const ACCOUNT_SUBMENU_LABELS: Record<'manualDebit' | 'manualCredit', string> = {
+  manualDebit: 'Cari Borçlandır',
+  manualCredit: 'Cari Alacaklandır',
 }
 
 function formatAmount(value: number): string {
@@ -49,7 +60,9 @@ function renderPanel(menu: DetailPanelKey, b2bUnitId: number) {
   if (menu === 'invoice') return <B2BUnitPurchaseInvoicePanel b2bUnitId={b2bUnitId} />
   if (menu === 'purchaseInvoice') return <B2BUnitPurchaseInvoicePanel b2bUnitId={b2bUnitId} />
   if (menu === 'salesInvoice') return <B2BUnitSalesInvoicePanel b2bUnitId={b2bUnitId} />
-  if (menu === 'accountTransactions') return <B2BUnitDetailAccountTransactionsPanel />
+  if (menu === 'accountTransactions') return <B2BUnitManualDebitPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'manualDebit') return <B2BUnitManualDebitPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'manualCredit') return <B2BUnitManualCreditPanel b2bUnitId={b2bUnitId} />
   if (menu === 'collection') return <B2BUnitDetailCollectionPanel />
   if (menu === 'payment') return <B2BUnitDetailPaymentPanel />
   return <B2BUnitDetailReportingPanel />
@@ -61,7 +74,7 @@ export function B2BUnitDetailPage() {
   const { id } = useParams<{ id: string }>()
   const parsedId = Number(id)
   const isValidId = Number.isFinite(parsedId) && parsedId > 0
-  const canUseInvoicePanels = hasAnyRole(['STAFF_USER'])
+  const canUseFinancePanels = hasAnyRole(['STAFF_USER'])
 
   const detailQuery = useQuery({
     queryKey: ['b2bunits', 'detail', parsedId],
@@ -77,35 +90,50 @@ export function B2BUnitDetailPage() {
   }, [detailQuery.data?.menus])
 
   const visibleMenus = useMemo(() => {
-    return menus.filter((menu) => (menu.key === 'invoice' ? canUseInvoicePanels : true))
-  }, [canUseInvoicePanels, menus])
+    return menus.filter((menu) => {
+      if (menu.key === 'invoice') return canUseFinancePanels
+      if (menu.key === 'accountTransactions') return canUseFinancePanels
+      return true
+    })
+  }, [canUseFinancePanels, menus])
 
   const [activeMenu, setActiveMenu] = useState<DetailPanelKey>('filter')
   const [invoiceExpanded, setInvoiceExpanded] = useState(false)
+  const [accountExpanded, setAccountExpanded] = useState(false)
 
   useEffect(() => {
     const validKeys: DetailPanelKey[] = [
       ...(visibleMenus.map((menu) => menu.key) as B2BUnitDetailMenuKey[]),
-      ...(canUseInvoicePanels ? (['purchaseInvoice', 'salesInvoice'] as const) : []),
+      ...(canUseFinancePanels
+        ? (['purchaseInvoice', 'salesInvoice', 'manualDebit', 'manualCredit'] as const)
+        : []),
     ]
 
     if (!validKeys.includes(activeMenu)) {
       const firstVisibleMenu = visibleMenus[0]?.key
-      if (firstVisibleMenu === 'invoice' && canUseInvoicePanels) {
+      if (firstVisibleMenu === 'invoice' && canUseFinancePanels) {
         setInvoiceExpanded(true)
         setActiveMenu('purchaseInvoice')
+      } else if (firstVisibleMenu === 'accountTransactions' && canUseFinancePanels) {
+        setAccountExpanded(true)
+        setActiveMenu('manualDebit')
       } else {
         setActiveMenu((firstVisibleMenu || 'filter') as DetailPanelKey)
       }
     }
-  }, [activeMenu, canUseInvoicePanels, visibleMenus])
+  }, [activeMenu, canUseFinancePanels, visibleMenus])
 
   const isInvoiceChildActive = activeMenu === 'purchaseInvoice' || activeMenu === 'salesInvoice'
-  const showInvoiceChildren = canUseInvoicePanels && (invoiceExpanded || isInvoiceChildActive)
+  const isAccountChildActive = activeMenu === 'manualDebit' || activeMenu === 'manualCredit'
+  const showInvoiceChildren = canUseFinancePanels && (invoiceExpanded || isInvoiceChildActive)
+  const showAccountChildren = canUseFinancePanels && (accountExpanded || isAccountChildActive)
 
   const activeMenuLabel = useMemo(() => {
     if (activeMenu === 'purchaseInvoice' || activeMenu === 'salesInvoice') {
       return INVOICE_SUBMENU_LABELS[activeMenu]
+    }
+    if (activeMenu === 'manualDebit' || activeMenu === 'manualCredit') {
+      return ACCOUNT_SUBMENU_LABELS[activeMenu]
     }
     return visibleMenus.find((item) => item.key === activeMenu)?.label || 'Detay'
   }, [activeMenu, visibleMenus])
@@ -242,6 +270,59 @@ export function B2BUnitDetailPage() {
                           )}
                         >
                           Satış Yap
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              }
+
+              if (menu.key === 'accountTransactions') {
+                return (
+                  <div key={menu.key} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAccountExpanded(true)
+                        if (!isAccountChildActive) {
+                          setActiveMenu('manualDebit')
+                        }
+                      }}
+                      className={cn(
+                        'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                        isAccountChildActive
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-muted text-foreground',
+                      )}
+                    >
+                      {menu.label}
+                    </button>
+
+                    {showAccountChildren ? (
+                      <div className="space-y-1 pl-3">
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('manualDebit')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'manualDebit'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Cari Borçlandır
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('manualCredit')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'manualCredit'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Cari Alacaklandır
                         </button>
                       </div>
                     ) : null}

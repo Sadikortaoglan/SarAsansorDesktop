@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -35,6 +35,7 @@ import { PaginatedTable } from '@/modules/shared/components/PaginatedTable'
 import {
   cariService,
   type B2BUnitInvoiceLinePayload,
+  type ManualAccountTransactionPayload,
   type B2BUnitTransaction,
 } from './cari.service'
 
@@ -79,6 +80,12 @@ interface InvoiceFormErrors {
   invoiceDate?: string
   lines?: string
   lineErrors: InvoiceLineFieldErrors[]
+}
+
+interface ManualAccountTransactionErrors {
+  transactionDate?: string
+  amount?: string
+  facilityId?: string
 }
 
 interface B2BUnitDetailPanelProps {
@@ -249,6 +256,35 @@ function parseInvoiceFieldErrors(error: unknown, lineCount: number): InvoiceForm
     }
     if (message.includes('selected elevator does not belong')) {
       mapped.elevatorId = 'Seçilen asansör, seçilen apartmana ait değil.'
+    }
+  })
+
+  return mapped
+}
+
+function parseManualAccountTransactionErrors(error: unknown): ManualAccountTransactionErrors {
+  const mapped: ManualAccountTransactionErrors = {}
+  if (!(error instanceof AxiosError)) return mapped
+
+  const responseData = error.response?.data as ApiResponse<unknown> | undefined
+  const messages = [
+    ...(Array.isArray(responseData?.errors) ? responseData.errors : []),
+    responseData?.message || '',
+  ].filter(Boolean)
+
+  messages.forEach((rawMessage) => {
+    const message = `${rawMessage || ''}`.toLowerCase()
+    if (message.includes('transactiondate')) {
+      mapped.transactionDate = 'Tarih zorunlu.'
+    }
+    if (message.includes('amount is required')) {
+      mapped.amount = 'Tutar zorunlu.'
+    }
+    if (message.includes('amount must be greater than zero')) {
+      mapped.amount = "Tutar 0'dan büyük olmalı."
+    }
+    if (message.includes('facility does not belong')) {
+      mapped.facilityId = 'Seçilen tesis bu cariye ait değil.'
     }
   })
 
@@ -1141,6 +1177,184 @@ export function B2BUnitSalesInvoicePanel({ b2bUnitId }: B2BUnitDetailPanelProps)
       </div>
     </div>
   )
+}
+
+function ManualAccountTransactionForm({
+  b2bUnitId,
+  mode,
+}: {
+  b2bUnitId: number
+  mode: 'debit' | 'credit'
+}) {
+  const { hasAnyRole } = useAuth()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const canManageTransactions = hasAnyRole(['STAFF_USER'])
+
+  const [transactionDate, setTransactionDate] = useState(toInputDate(new Date()))
+  const [facilityId, setFacilityId] = useState<number | undefined>(undefined)
+  const [amountInput, setAmountInput] = useState('')
+  const [description, setDescription] = useState('')
+  const [errors, setErrors] = useState<ManualAccountTransactionErrors>({})
+
+  const facilitiesQuery = useQuery({
+    queryKey: ['facilities', 'lookup', 'b2bunit-account-transaction', b2bUnitId],
+    queryFn: () => cariService.lookupFacilities(b2bUnitId),
+    enabled: canManageTransactions,
+  })
+
+  const mutation = useMutation({
+    mutationFn: (payload: ManualAccountTransactionPayload) => {
+      if (mode === 'debit') {
+        return cariService.createManualDebit(b2bUnitId, payload)
+      }
+      return cariService.createManualCredit(b2bUnitId, payload)
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Başarılı',
+        description:
+          mode === 'debit'
+            ? 'Cari borçlandırma işlemi başarıyla kaydedildi.'
+            : 'Cari alacaklandırma işlemi başarıyla kaydedildi.',
+        variant: 'success',
+      })
+      setAmountInput('')
+      setDescription('')
+      setErrors({})
+      queryClient.invalidateQueries({ queryKey: ['b2bunits', 'transactions', b2bUnitId] })
+    },
+    onError: (error) => {
+      setErrors(parseManualAccountTransactionErrors(error))
+      toast({
+        title: 'Hata',
+        description: getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const handleSave = () => {
+    const nextErrors: ManualAccountTransactionErrors = {}
+    const amountValue = parseNumericInput(amountInput)
+
+    if (!transactionDate) {
+      nextErrors.transactionDate = 'Tarih zorunlu.'
+    }
+    if (!amountInput.trim()) {
+      nextErrors.amount = 'Tutar zorunlu.'
+    } else if (!(amountValue > 0)) {
+      nextErrors.amount = "Tutar 0'dan büyük olmalı."
+    }
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      setErrors(nextErrors)
+      toast({
+        title: 'Hata',
+        description: 'Lütfen zorunlu alanları kontrol edin.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    mutation.mutate({
+      transactionDate,
+      facilityId,
+      amount: amountValue,
+      description: description.trim() || undefined,
+    })
+  }
+
+  if (!canManageTransactions) {
+    return renderUnauthorizedMessage()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`manual-${mode}-date`}>Tarih</Label>
+          <Input
+            id={`manual-${mode}-date`}
+            type="date"
+            value={transactionDate}
+            onChange={(event) => {
+              setTransactionDate(event.target.value)
+              setErrors((prev) => ({ ...prev, transactionDate: undefined }))
+            }}
+            className={errors.transactionDate ? 'border-destructive' : ''}
+          />
+          {errors.transactionDate ? <p className="text-xs text-destructive">{errors.transactionDate}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tesis (Bina) Seç</Label>
+          <Select
+            value={facilityId ? String(facilityId) : undefined}
+            onValueChange={(value) => {
+              setFacilityId(Number(value))
+              setErrors((prev) => ({ ...prev, facilityId: undefined }))
+            }}
+          >
+            <SelectTrigger className={errors.facilityId ? 'border-destructive' : ''}>
+              <SelectValue placeholder="Tesis (Bina) seçin" />
+            </SelectTrigger>
+            <SelectContent>
+              {(facilitiesQuery.data || []).map((facility) => (
+                <SelectItem key={facility.id} value={String(facility.id)}>
+                  {facility.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.facilityId ? <p className="text-xs text-destructive">{errors.facilityId}</p> : null}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`manual-${mode}-amount`}>Tutar</Label>
+          <Input
+            id={`manual-${mode}-amount`}
+            type="number"
+            min="0"
+            step="0.01"
+            value={amountInput}
+            onChange={(event) => {
+              setAmountInput(event.target.value)
+              setErrors((prev) => ({ ...prev, amount: undefined }))
+            }}
+            className={errors.amount ? 'border-destructive' : ''}
+          />
+          {errors.amount ? <p className="text-xs text-destructive">{errors.amount}</p> : null}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={`manual-${mode}-description`}>Açıklama</Label>
+        <Textarea
+          id={`manual-${mode}-description`}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={4}
+        />
+      </div>
+
+      <div className="flex justify-end">
+        <Button type="button" onClick={handleSave} disabled={mutation.isPending}>
+          {mutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+export function B2BUnitManualDebitPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <ManualAccountTransactionForm b2bUnitId={b2bUnitId} mode="debit" />
+}
+
+export function B2BUnitManualCreditPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <ManualAccountTransactionForm b2bUnitId={b2bUnitId} mode="credit" />
 }
 
 export function B2BUnitDetailInvoicePanel() {

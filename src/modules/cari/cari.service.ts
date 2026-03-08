@@ -106,6 +106,13 @@ export interface SalesInvoicePayload extends PurchaseInvoicePayload {
   elevatorId: number
 }
 
+export interface ManualAccountTransactionPayload {
+  transactionDate: string
+  facilityId?: number
+  amount: number
+  description?: string
+}
+
 export interface B2BUnitInvoiceLine {
   id?: number
   productName: string
@@ -195,6 +202,15 @@ interface B2BUnitTransactionPageResponse {
   size?: number
   totalElements?: number
   totalPages?: number
+}
+
+interface B2BUnitTransactionResponseRaw {
+  transactionDate?: string | null
+  transactionType?: string | null
+  debit?: number | string | null
+  credit?: number | string | null
+  balance?: number | string | null
+  description?: string | null
 }
 
 interface B2BUnitInvoiceResponse {
@@ -307,7 +323,9 @@ function normalizeDetail(raw: B2BUnitDetailResponse): B2BUnitDetail {
 }
 
 function normalizeTransaction(
-  raw: NonNullable<B2BUnitTransactionPageResponse['content']>[number],
+  raw:
+    | NonNullable<B2BUnitTransactionPageResponse['content']>[number]
+    | B2BUnitTransactionResponseRaw,
 ): B2BUnitTransaction {
   return {
     transactionDate: raw.transactionDate || '',
@@ -402,6 +420,15 @@ function toSalesInvoicePayload(payload: SalesInvoicePayload) {
     invoiceDate: cleanString(payload.invoiceDate),
     description: cleanString(payload.description),
     lines: normalizeInvoiceLines(payload.lines),
+  }
+}
+
+function toManualAccountTransactionPayload(payload: ManualAccountTransactionPayload) {
+  return {
+    transactionDate: cleanString(payload.transactionDate),
+    facilityId: cleanNumber(payload.facilityId),
+    amount: cleanNumber(payload.amount),
+    description: cleanString(payload.description),
   }
 }
 
@@ -523,6 +550,30 @@ export const cariService = {
         toSalesInvoicePayload(payload),
       )
       .then((response) => normalizeInvoice(unwrapResponse(response.data)))
+  },
+
+  createManualDebit(
+    b2bUnitId: number,
+    payload: ManualAccountTransactionPayload,
+  ): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/account-transactions/manual-debit`,
+        toManualAccountTransactionPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createManualCredit(
+    b2bUnitId: number,
+    payload: ManualAccountTransactionPayload,
+  ): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/account-transactions/manual-credit`,
+        toManualAccountTransactionPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
   },
 
   getMyUnit(): Promise<B2BUnit> {
