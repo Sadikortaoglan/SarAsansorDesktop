@@ -12,18 +12,22 @@ import {
   type B2BUnitDetailMenuKey,
 } from './cari.service'
 import {
+  B2BUnitBankPaymentPanel,
   B2BUnitBankCollectionPanel,
+  B2BUnitCashPaymentPanel,
   B2BUnitCashCollectionPanel,
   B2BUnitCheckCollectionPanel,
+  B2BUnitCheckPaymentPanel,
   B2BUnitDetailFilterPanel,
   B2BUnitCreditCardCollectionPanel,
+  B2BUnitCreditCardPaymentPanel,
   B2BUnitManualCreditPanel,
   B2BUnitManualDebitPanel,
   B2BUnitPaytrCollectionPanel,
   B2BUnitPromissoryNoteCollectionPanel,
+  B2BUnitPromissoryNotePaymentPanel,
   B2BUnitPurchaseInvoicePanel,
-  B2BUnitDetailPaymentPanel,
-  B2BUnitDetailReportingPanel,
+  B2BUnitReportingPanel,
   B2BUnitSalesInvoicePanel,
 } from './B2BUnitDetailPanels'
 
@@ -48,6 +52,11 @@ type DetailPanelKey =
   | 'bankCollection'
   | 'checkCollection'
   | 'promissoryNoteCollection'
+  | 'cashPayment'
+  | 'creditCardPayment'
+  | 'bankPayment'
+  | 'checkPayment'
+  | 'promissoryNotePayment'
 
 const INVOICE_SUBMENU_LABELS: Record<'purchaseInvoice' | 'salesInvoice', string> = {
   purchaseInvoice: 'Alış Yap',
@@ -76,6 +85,17 @@ const COLLECTION_SUBMENU_LABELS: Record<
   promissoryNoteCollection: 'Senet Tahsilat',
 }
 
+const PAYMENT_SUBMENU_LABELS: Record<
+  'cashPayment' | 'creditCardPayment' | 'bankPayment' | 'checkPayment' | 'promissoryNotePayment',
+  string
+> = {
+  cashPayment: 'Nakit Ödeme',
+  creditCardPayment: 'Kredi Kartı Ödeme',
+  bankPayment: 'Banka Ödeme',
+  checkPayment: 'Çek Ödeme',
+  promissoryNotePayment: 'Senet Ödeme',
+}
+
 function formatAmount(value: number): string {
   return value.toLocaleString('tr-TR', {
     minimumFractionDigits: 2,
@@ -98,8 +118,13 @@ function renderPanel(menu: DetailPanelKey, b2bUnitId: number) {
   if (menu === 'bankCollection') return <B2BUnitBankCollectionPanel b2bUnitId={b2bUnitId} />
   if (menu === 'checkCollection') return <B2BUnitCheckCollectionPanel b2bUnitId={b2bUnitId} />
   if (menu === 'promissoryNoteCollection') return <B2BUnitPromissoryNoteCollectionPanel b2bUnitId={b2bUnitId} />
-  if (menu === 'payment') return <B2BUnitDetailPaymentPanel />
-  return <B2BUnitDetailReportingPanel />
+  if (menu === 'payment') return <B2BUnitCashPaymentPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'cashPayment') return <B2BUnitCashPaymentPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'creditCardPayment') return <B2BUnitCreditCardPaymentPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'bankPayment') return <B2BUnitBankPaymentPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'checkPayment') return <B2BUnitCheckPaymentPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'promissoryNotePayment') return <B2BUnitPromissoryNotePaymentPanel b2bUnitId={b2bUnitId} />
+  return <B2BUnitReportingPanel b2bUnitId={b2bUnitId} />
 }
 
 export function B2BUnitDetailPage() {
@@ -128,6 +153,7 @@ export function B2BUnitDetailPage() {
       if (menu.key === 'invoice') return canUseFinancePanels
       if (menu.key === 'accountTransactions') return canUseFinancePanels
       if (menu.key === 'collection') return canUseFinancePanels
+      if (menu.key === 'payment') return canUseFinancePanels
       return true
     })
   }, [canUseFinancePanels, menus])
@@ -136,6 +162,7 @@ export function B2BUnitDetailPage() {
   const [invoiceExpanded, setInvoiceExpanded] = useState(false)
   const [accountExpanded, setAccountExpanded] = useState(false)
   const [collectionExpanded, setCollectionExpanded] = useState(false)
+  const [paymentExpanded, setPaymentExpanded] = useState(false)
 
   useEffect(() => {
     const validKeys: DetailPanelKey[] = [
@@ -152,6 +179,11 @@ export function B2BUnitDetailPage() {
             'bankCollection',
             'checkCollection',
             'promissoryNoteCollection',
+            'cashPayment',
+            'creditCardPayment',
+            'bankPayment',
+            'checkPayment',
+            'promissoryNotePayment',
           ] as const)
         : []),
     ]
@@ -167,6 +199,9 @@ export function B2BUnitDetailPage() {
       } else if (firstVisibleMenu === 'collection' && canUseFinancePanels) {
         setCollectionExpanded(true)
         setActiveMenu('cashCollection')
+      } else if (firstVisibleMenu === 'payment' && canUseFinancePanels) {
+        setPaymentExpanded(true)
+        setActiveMenu('cashPayment')
       } else {
         setActiveMenu((firstVisibleMenu || 'filter') as DetailPanelKey)
       }
@@ -182,9 +217,16 @@ export function B2BUnitDetailPage() {
     activeMenu === 'bankCollection' ||
     activeMenu === 'checkCollection' ||
     activeMenu === 'promissoryNoteCollection'
+  const isPaymentChildActive =
+    activeMenu === 'cashPayment' ||
+    activeMenu === 'creditCardPayment' ||
+    activeMenu === 'bankPayment' ||
+    activeMenu === 'checkPayment' ||
+    activeMenu === 'promissoryNotePayment'
   const showInvoiceChildren = canUseFinancePanels && (invoiceExpanded || isInvoiceChildActive)
   const showAccountChildren = canUseFinancePanels && (accountExpanded || isAccountChildActive)
   const showCollectionChildren = canUseFinancePanels && (collectionExpanded || isCollectionChildActive)
+  const showPaymentChildren = canUseFinancePanels && (paymentExpanded || isPaymentChildActive)
 
   const activeMenuLabel = useMemo(() => {
     if (activeMenu === 'purchaseInvoice' || activeMenu === 'salesInvoice') {
@@ -202,6 +244,15 @@ export function B2BUnitDetailPage() {
       activeMenu === 'promissoryNoteCollection'
     ) {
       return COLLECTION_SUBMENU_LABELS[activeMenu]
+    }
+    if (
+      activeMenu === 'cashPayment' ||
+      activeMenu === 'creditCardPayment' ||
+      activeMenu === 'bankPayment' ||
+      activeMenu === 'checkPayment' ||
+      activeMenu === 'promissoryNotePayment'
+    ) {
+      return PAYMENT_SUBMENU_LABELS[activeMenu]
     }
     return visibleMenus.find((item) => item.key === activeMenu)?.label || 'Detay'
   }, [activeMenu, visibleMenus])
@@ -492,6 +543,95 @@ export function B2BUnitDetailPage() {
                           )}
                         >
                           Senet Tahsilat
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              }
+
+              if (menu.key === 'payment') {
+                return (
+                  <div key={menu.key} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentExpanded(true)
+                        if (!isPaymentChildActive) {
+                          setActiveMenu('cashPayment')
+                        }
+                      }}
+                      className={cn(
+                        'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                        isPaymentChildActive
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-muted text-foreground',
+                      )}
+                    >
+                      {menu.label}
+                    </button>
+
+                    {showPaymentChildren ? (
+                      <div className="space-y-1 pl-3">
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('cashPayment')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'cashPayment'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Nakit Ödeme
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('creditCardPayment')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'creditCardPayment'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Kredi Kartı Ödeme
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('bankPayment')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'bankPayment'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Banka Ödeme
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('checkPayment')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'checkPayment'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Çek Ödeme
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('promissoryNotePayment')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'promissoryNotePayment'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Senet Ödeme
                         </button>
                       </div>
                     ) : null}

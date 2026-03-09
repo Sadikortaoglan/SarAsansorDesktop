@@ -1,5 +1,6 @@
 import apiClient from '@/lib/api'
 import { unwrapArrayResponse, unwrapResponse, type ApiResponse } from '@/lib/api-response'
+import { resolveApiBaseUrl } from '@/lib/api-base-url'
 import { getPage } from '@/modules/shared/api'
 import type { SpringPage } from '@/modules/shared/types'
 
@@ -129,6 +130,19 @@ export interface BankCollectionPayload extends CollectionBasePayload {
 }
 
 export interface CheckCollectionPayload extends CollectionBasePayload {
+  dueDate: string
+  serialNumber: string
+}
+
+export interface CashPaymentPayload extends CollectionBasePayload {
+  cashAccountId: number
+}
+
+export interface BankPaymentPayload extends CollectionBasePayload {
+  bankAccountId: number
+}
+
+export interface CheckPaymentPayload extends CollectionBasePayload {
   dueDate: string
   serialNumber: string
 }
@@ -483,6 +497,28 @@ function toCheckCollectionPayload(payload: CheckCollectionPayload) {
   }
 }
 
+function toCashPaymentPayload(payload: CashPaymentPayload) {
+  return {
+    ...toCollectionBasePayload(payload),
+    cashAccountId: cleanNumber(payload.cashAccountId),
+  }
+}
+
+function toBankPaymentPayload(payload: BankPaymentPayload) {
+  return {
+    ...toCollectionBasePayload(payload),
+    bankAccountId: cleanNumber(payload.bankAccountId),
+  }
+}
+
+function toCheckPaymentPayload(payload: CheckPaymentPayload) {
+  return {
+    ...toCollectionBasePayload(payload),
+    dueDate: cleanString(payload.dueDate),
+    serialNumber: cleanString(payload.serialNumber),
+  }
+}
+
 function toUnitPayload(payload: B2BUnitFormPayload) {
   return {
     name: payload.name.trim(),
@@ -498,6 +534,12 @@ function toUnitPayload(payload: B2BUnitFormPayload) {
     portalUsername: cleanString(payload.portalUsername),
     portalPassword: cleanString(payload.portalPasswordHash),
   }
+}
+
+function toAbsoluteApiUrl(path: string): string {
+  const base = resolveApiBaseUrl().replace(/\/$/, '')
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${base}${normalizedPath}`
 }
 
 export const cariService = {
@@ -701,6 +743,74 @@ export const cariService = {
         toCheckCollectionPayload(payload),
       )
       .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createCashPayment(b2bUnitId: number, payload: CashPaymentPayload): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/payments/cash`,
+        toCashPaymentPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createCreditCardPayment(b2bUnitId: number, payload: BankPaymentPayload): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/payments/credit-card`,
+        toBankPaymentPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createBankPayment(b2bUnitId: number, payload: BankPaymentPayload): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/payments/bank`,
+        toBankPaymentPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createCheckPayment(b2bUnitId: number, payload: CheckPaymentPayload): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/payments/check`,
+        toCheckPaymentPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createPromissoryNotePayment(
+    b2bUnitId: number,
+    payload: CheckPaymentPayload,
+  ): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/payments/promissory-note`,
+        toCheckPaymentPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  getUnitReportHtml(id: number, startDate: string, endDate: string): Promise<string> {
+    return apiClient
+      .get<string>(`/b2b-units/${id}/report`, {
+        params: { startDate, endDate },
+        responseType: 'text',
+        headers: {
+          Accept: 'text/html',
+        },
+      })
+      .then((response) => response.data)
+  },
+
+  getUnitReportUrl(id: number, startDate: string, endDate: string): string {
+    const search = new URLSearchParams({
+      startDate,
+      endDate,
+    })
+    return toAbsoluteApiUrl(`/b2b-units/${id}/report?${search.toString()}`)
   },
 
   getMyUnit(): Promise<B2BUnit> {

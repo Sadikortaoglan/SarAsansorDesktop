@@ -33,10 +33,13 @@ import type { ApiResponse } from '@/lib/api-response'
 import { getUserFriendlyErrorMessage } from '@/lib/api-error-handler'
 import { PaginatedTable } from '@/modules/shared/components/PaginatedTable'
 import {
+  type BankPaymentPayload,
   cariService,
   type B2BUnitInvoiceLinePayload,
   type BankCollectionPayload,
+  type CashPaymentPayload,
   type CashCollectionPayload,
+  type CheckPaymentPayload,
   type CheckCollectionPayload,
   type CollectionBasePayload,
   type ManualAccountTransactionPayload,
@@ -103,6 +106,24 @@ interface CollectionFormErrors {
 }
 
 type CollectionMode = 'cash' | 'paytr' | 'creditCard' | 'bank' | 'check' | 'promissoryNote'
+
+interface PaymentFormErrors {
+  transactionDate?: string
+  amount?: string
+  facilityId?: string
+  cashAccountId?: string
+  bankAccountId?: string
+  dueDate?: string
+  serialNumber?: string
+}
+
+type PaymentMode = 'cash' | 'creditCard' | 'bank' | 'check' | 'promissoryNote'
+
+interface ReportingFormErrors {
+  startDate?: string
+  endDate?: string
+  range?: string
+}
 
 interface B2BUnitDetailPanelProps {
   b2bUnitId: number
@@ -351,12 +372,95 @@ function parseCollectionFieldErrors(error: unknown, mode: CollectionMode): Colle
   return mapped
 }
 
+function parsePaymentFieldErrors(error: unknown, mode: PaymentMode): PaymentFormErrors {
+  const mapped: PaymentFormErrors = {}
+  if (!(error instanceof AxiosError)) return mapped
+
+  const responseData = error.response?.data as ApiResponse<unknown> | undefined
+  const messages = [
+    ...(Array.isArray(responseData?.errors) ? responseData.errors : []),
+    responseData?.message || '',
+  ].filter(Boolean)
+
+  messages.forEach((rawMessage) => {
+    const message = `${rawMessage || ''}`.toLowerCase()
+    if (message.includes('transactiondate')) {
+      mapped.transactionDate = 'Tarih zorunlu.'
+    }
+    if (message.includes('facilityid')) {
+      mapped.facilityId = 'Tesis (Bina) seçimi zorunlu.'
+    }
+    if (message.includes('amount is required')) {
+      mapped.amount = 'Tutar zorunlu.'
+    }
+    if (message.includes('amount must be greater than zero')) {
+      mapped.amount = "Tutar 0'dan büyük olmalı."
+    }
+    if (message.includes('cashaccountid')) {
+      mapped.cashAccountId = 'Kasa seçimi zorunlu.'
+    }
+    if (message.includes('bankaccountid')) {
+      mapped.bankAccountId = 'Banka seçimi zorunlu.'
+    }
+    if (message.includes('duedate')) {
+      mapped.dueDate = 'Vade tarihi zorunlu.'
+    }
+    if (message.includes('serialnumber')) {
+      mapped.serialNumber = mode === 'promissoryNote' ? 'Senet seri no zorunlu.' : 'Çek seri no zorunlu.'
+    }
+    if (message.includes('facility does not belong')) {
+      mapped.facilityId = 'Seçilen tesis bu cariye ait değil.'
+    }
+  })
+
+  return mapped
+}
+
 function renderUnauthorizedMessage() {
   return (
     <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
       Bu alanı görüntüleme yetkiniz bulunmamaktadır.
     </div>
   )
+}
+
+function renderReportLoadingState(popup: Window) {
+  popup.document.open()
+  popup.document.write(
+    '<!doctype html><html><head><meta charset="UTF-8" /><title>Rapor</title></head><body style="font-family:Arial,sans-serif;padding:24px;">Rapor hazırlanıyor...</body></html>',
+  )
+  popup.document.close()
+}
+
+function ensureAutoPrintHtml(rawHtml: string, title = 'Rapor'): string {
+  const trimmed = `${rawHtml || ''}`.trim()
+  const baseHtml =
+    trimmed ||
+    `<!doctype html><html><head><meta charset="UTF-8" /><title>${title}</title></head><body><h1>${title}</h1><p>Rapor içeriği bulunamadı.</p></body></html>`
+
+  if (/window\.print\s*\(/i.test(baseHtml)) return baseHtml
+
+  const printScript = `
+<script>
+(function () {
+  function runPrint() {
+    try {
+      window.focus();
+      setTimeout(function () { window.print(); }, 150);
+    } catch (e) {}
+  }
+  if (document.readyState === 'complete') {
+    runPrint();
+  } else {
+    window.addEventListener('load', runPrint, { once: true });
+  }
+})();
+</script>`
+
+  if (baseHtml.includes('</body>')) {
+    return baseHtml.replace('</body>', `${printScript}</body>`)
+  }
+  return `${baseHtml}${printScript}`
 }
 
 interface InvoiceLinesTableProps {
@@ -1789,6 +1893,361 @@ export function B2BUnitPromissoryNoteCollectionPanel({ b2bUnitId }: B2BUnitDetai
   return <CollectionTransactionForm b2bUnitId={b2bUnitId} mode="promissoryNote" />
 }
 
+function getPaymentSuccessMessage(mode: PaymentMode): string {
+  if (mode === 'cash') return 'Nakit ödeme işlemi başarıyla kaydedildi.'
+  if (mode === 'creditCard') return 'Kredi kartı ödeme işlemi başarıyla kaydedildi.'
+  if (mode === 'bank') return 'Banka ödeme işlemi başarıyla kaydedildi.'
+  if (mode === 'check') return 'Çek ödeme işlemi başarıyla kaydedildi.'
+  return 'Senet ödeme işlemi başarıyla kaydedildi.'
+}
+
+function PaymentTransactionForm({
+  b2bUnitId,
+  mode,
+}: {
+  b2bUnitId: number
+  mode: PaymentMode
+}) {
+  const { hasAnyRole } = useAuth()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const canManagePayments = hasAnyRole(['STAFF_USER'])
+
+  const requiresCashAccount = mode === 'cash'
+  const requiresBankAccount = mode === 'creditCard' || mode === 'bank'
+  const requiresDueDate = mode === 'check' || mode === 'promissoryNote'
+  const requiresSerialNumber = mode === 'check' || mode === 'promissoryNote'
+
+  const [transactionDate, setTransactionDate] = useState(toInputDate(new Date()))
+  const [facilityId, setFacilityId] = useState<number | undefined>(undefined)
+  const [amountInput, setAmountInput] = useState('')
+  const [cashAccountId, setCashAccountId] = useState<number | undefined>(undefined)
+  const [bankAccountId, setBankAccountId] = useState<number | undefined>(undefined)
+  const [dueDate, setDueDate] = useState('')
+  const [serialNumber, setSerialNumber] = useState('')
+  const [description, setDescription] = useState('')
+  const [errors, setErrors] = useState<PaymentFormErrors>({})
+
+  const facilitiesQuery = useQuery({
+    queryKey: ['facilities', 'lookup', 'b2bunit-payment', b2bUnitId],
+    queryFn: () => cariService.lookupFacilities(b2bUnitId),
+    enabled: canManagePayments,
+  })
+
+  const cashAccountsQuery = useQuery({
+    queryKey: ['cash-accounts', 'lookup', 'b2bunit-payment'],
+    queryFn: () => cariService.lookupCashAccounts(),
+    enabled: canManagePayments && requiresCashAccount,
+  })
+
+  const bankAccountsQuery = useQuery({
+    queryKey: ['bank-accounts', 'lookup', 'b2bunit-payment'],
+    queryFn: () => cariService.lookupBankAccounts(),
+    enabled: canManagePayments && requiresBankAccount,
+  })
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const amount = parseNumericInput(amountInput)
+      const trimmedDescription = description.trim() || undefined
+
+      if (mode === 'cash') {
+        const payload: CashPaymentPayload = {
+          transactionDate,
+          facilityId,
+          amount,
+          cashAccountId: Number(cashAccountId),
+          description: trimmedDescription,
+        }
+        return cariService.createCashPayment(b2bUnitId, payload)
+      }
+
+      if (mode === 'creditCard') {
+        const payload: BankPaymentPayload = {
+          transactionDate,
+          facilityId,
+          amount,
+          bankAccountId: Number(bankAccountId),
+          description: trimmedDescription,
+        }
+        return cariService.createCreditCardPayment(b2bUnitId, payload)
+      }
+
+      if (mode === 'bank') {
+        const payload: BankPaymentPayload = {
+          transactionDate,
+          facilityId,
+          amount,
+          bankAccountId: Number(bankAccountId),
+          description: trimmedDescription,
+        }
+        return cariService.createBankPayment(b2bUnitId, payload)
+      }
+
+      const checkPayload: CheckPaymentPayload = {
+        transactionDate,
+        facilityId,
+        dueDate,
+        serialNumber: serialNumber.trim(),
+        amount,
+        description: trimmedDescription,
+      }
+
+      if (mode === 'check') {
+        return cariService.createCheckPayment(b2bUnitId, checkPayload)
+      }
+
+      return cariService.createPromissoryNotePayment(b2bUnitId, checkPayload)
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Başarılı',
+        description: getPaymentSuccessMessage(mode),
+        variant: 'success',
+      })
+      setAmountInput('')
+      setDescription('')
+      setSerialNumber('')
+      setErrors({})
+      queryClient.invalidateQueries({ queryKey: ['b2bunits', 'transactions', b2bUnitId] })
+    },
+    onError: (error) => {
+      setErrors(parsePaymentFieldErrors(error, mode))
+      toast({
+        title: 'Hata',
+        description: getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const handleSave = () => {
+    const nextErrors: PaymentFormErrors = {}
+    const amountValue = parseNumericInput(amountInput)
+
+    if (!transactionDate) {
+      nextErrors.transactionDate = 'Tarih zorunlu.'
+    }
+    if (!amountInput.trim()) {
+      nextErrors.amount = 'Tutar zorunlu.'
+    } else if (!(amountValue > 0)) {
+      nextErrors.amount = "Tutar 0'dan büyük olmalı."
+    }
+    if (requiresCashAccount && !cashAccountId) {
+      nextErrors.cashAccountId = 'Kasa seçimi zorunlu.'
+    }
+    if (requiresBankAccount && !bankAccountId) {
+      nextErrors.bankAccountId = 'Banka seçimi zorunlu.'
+    }
+    if (requiresDueDate && !dueDate) {
+      nextErrors.dueDate = 'Vade tarihi zorunlu.'
+    }
+    if (requiresSerialNumber && !serialNumber.trim()) {
+      nextErrors.serialNumber = mode === 'promissoryNote' ? 'Senet seri no zorunlu.' : 'Çek seri no zorunlu.'
+    }
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      setErrors(nextErrors)
+      toast({
+        title: 'Hata',
+        description: 'Lütfen zorunlu alanları kontrol edin.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    mutation.mutate()
+  }
+
+  if (!canManagePayments) {
+    return renderUnauthorizedMessage()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`payment-${mode}-date`}>Tarih</Label>
+          <Input
+            id={`payment-${mode}-date`}
+            type="date"
+            value={transactionDate}
+            onChange={(event) => {
+              setTransactionDate(event.target.value)
+              setErrors((prev) => ({ ...prev, transactionDate: undefined }))
+            }}
+            className={errors.transactionDate ? 'border-destructive' : ''}
+          />
+          {errors.transactionDate ? <p className="text-xs text-destructive">{errors.transactionDate}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tesis (Bina) Seç</Label>
+          <Select
+            value={facilityId ? String(facilityId) : undefined}
+            onValueChange={(value) => {
+              setFacilityId(Number(value))
+              setErrors((prev) => ({ ...prev, facilityId: undefined }))
+            }}
+          >
+            <SelectTrigger className={errors.facilityId ? 'border-destructive' : ''}>
+              <SelectValue placeholder="Tesis (Bina) seçin" />
+            </SelectTrigger>
+            <SelectContent>
+              {(facilitiesQuery.data || []).map((facility) => (
+                <SelectItem key={facility.id} value={String(facility.id)}>
+                  {facility.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.facilityId ? <p className="text-xs text-destructive">{errors.facilityId}</p> : null}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {requiresDueDate ? (
+          <div className="space-y-2">
+            <Label htmlFor={`payment-${mode}-due-date`}>Vade Tarihi</Label>
+            <Input
+              id={`payment-${mode}-due-date`}
+              type="date"
+              value={dueDate}
+              onChange={(event) => {
+                setDueDate(event.target.value)
+                setErrors((prev) => ({ ...prev, dueDate: undefined }))
+              }}
+              className={errors.dueDate ? 'border-destructive' : ''}
+            />
+            {errors.dueDate ? <p className="text-xs text-destructive">{errors.dueDate}</p> : null}
+          </div>
+        ) : null}
+
+        {requiresSerialNumber ? (
+          <div className="space-y-2">
+            <Label htmlFor={`payment-${mode}-serial-number`}>
+              {mode === 'promissoryNote' ? 'Senet Seri No' : 'Çek Seri No'}
+            </Label>
+            <Input
+              id={`payment-${mode}-serial-number`}
+              value={serialNumber}
+              onChange={(event) => {
+                setSerialNumber(event.target.value)
+                setErrors((prev) => ({ ...prev, serialNumber: undefined }))
+              }}
+              className={errors.serialNumber ? 'border-destructive' : ''}
+            />
+            {errors.serialNumber ? <p className="text-xs text-destructive">{errors.serialNumber}</p> : null}
+          </div>
+        ) : null}
+
+        <div className="space-y-2">
+          <Label htmlFor={`payment-${mode}-amount`}>Tutar</Label>
+          <Input
+            id={`payment-${mode}-amount`}
+            type="number"
+            min="0"
+            step="0.01"
+            value={amountInput}
+            onChange={(event) => {
+              setAmountInput(event.target.value)
+              setErrors((prev) => ({ ...prev, amount: undefined }))
+            }}
+            className={errors.amount ? 'border-destructive' : ''}
+          />
+          {errors.amount ? <p className="text-xs text-destructive">{errors.amount}</p> : null}
+        </div>
+
+        {requiresCashAccount ? (
+          <div className="space-y-2">
+            <Label>Kasa Seç</Label>
+            <Select
+              value={cashAccountId ? String(cashAccountId) : undefined}
+              onValueChange={(value) => {
+                setCashAccountId(Number(value))
+                setErrors((prev) => ({ ...prev, cashAccountId: undefined }))
+              }}
+            >
+              <SelectTrigger className={errors.cashAccountId ? 'border-destructive' : ''}>
+                <SelectValue placeholder="Kasa seçin" />
+              </SelectTrigger>
+              <SelectContent>
+                {(cashAccountsQuery.data || []).map((cashAccount) => (
+                  <SelectItem key={cashAccount.id} value={String(cashAccount.id)}>
+                    {cashAccount.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.cashAccountId ? <p className="text-xs text-destructive">{errors.cashAccountId}</p> : null}
+          </div>
+        ) : null}
+
+        {requiresBankAccount ? (
+          <div className="space-y-2">
+            <Label>Banka Seç</Label>
+            <Select
+              value={bankAccountId ? String(bankAccountId) : undefined}
+              onValueChange={(value) => {
+                setBankAccountId(Number(value))
+                setErrors((prev) => ({ ...prev, bankAccountId: undefined }))
+              }}
+            >
+              <SelectTrigger className={errors.bankAccountId ? 'border-destructive' : ''}>
+                <SelectValue placeholder="Banka seçin" />
+              </SelectTrigger>
+              <SelectContent>
+                {(bankAccountsQuery.data || []).map((bankAccount) => (
+                  <SelectItem key={bankAccount.id} value={String(bankAccount.id)}>
+                    {bankAccount.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.bankAccountId ? <p className="text-xs text-destructive">{errors.bankAccountId}</p> : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={`payment-${mode}-description`}>Açıklama</Label>
+        <Textarea
+          id={`payment-${mode}-description`}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={4}
+        />
+      </div>
+
+      <div className="flex justify-end">
+        <Button type="button" onClick={handleSave} disabled={mutation.isPending}>
+          {mutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+export function B2BUnitCashPaymentPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <PaymentTransactionForm b2bUnitId={b2bUnitId} mode="cash" />
+}
+
+export function B2BUnitCreditCardPaymentPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <PaymentTransactionForm b2bUnitId={b2bUnitId} mode="creditCard" />
+}
+
+export function B2BUnitBankPaymentPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <PaymentTransactionForm b2bUnitId={b2bUnitId} mode="bank" />
+}
+
+export function B2BUnitCheckPaymentPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <PaymentTransactionForm b2bUnitId={b2bUnitId} mode="check" />
+}
+
+export function B2BUnitPromissoryNotePaymentPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <PaymentTransactionForm b2bUnitId={b2bUnitId} mode="promissoryNote" />
+}
+
 export function B2BUnitDetailInvoicePanel() {
   return <h2 className="text-lg font-semibold">Fatura</h2>
 }
@@ -1801,10 +2260,117 @@ export function B2BUnitDetailCollectionPanel({ b2bUnitId }: B2BUnitDetailPanelPr
   return <B2BUnitCashCollectionPanel b2bUnitId={b2bUnitId} />
 }
 
-export function B2BUnitDetailPaymentPanel() {
-  return <h2 className="text-lg font-semibold">Ödeme</h2>
+export function B2BUnitDetailPaymentPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <B2BUnitCashPaymentPanel b2bUnitId={b2bUnitId} />
 }
 
-export function B2BUnitDetailReportingPanel() {
-  return <h2 className="text-lg font-semibold">Raporlama</h2>
+export function B2BUnitReportingPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  const { toast } = useToast()
+  const defaultRange = useMemo(() => getDefaultDateRange(), [])
+
+  const [startDate, setStartDate] = useState(defaultRange.startDate)
+  const [endDate, setEndDate] = useState(defaultRange.endDate)
+  const [errors, setErrors] = useState<ReportingFormErrors>({})
+  const [isGenerating, setIsGenerating] = useState(false)
+
+  const handleGenerateReport = async () => {
+    const nextErrors: ReportingFormErrors = {}
+    if (!startDate) {
+      nextErrors.startDate = 'Rapor başlangıç tarihi zorunlu.'
+    }
+    if (!endDate) {
+      nextErrors.endDate = 'Rapor bitiş tarihi zorunlu.'
+    }
+    if (startDate && endDate && startDate > endDate) {
+      nextErrors.range = 'Rapor başlangıç tarihi, rapor bitiş tarihinden büyük olamaz.'
+    }
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      setErrors(nextErrors)
+      return
+    }
+
+    const reportPopup = window.open('about:blank', '_blank')
+    if (!reportPopup) {
+      toast({
+        title: 'Popup engellendi',
+        description: 'Raporu görüntülemek için popup izni verin.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    renderReportLoadingState(reportPopup)
+    setIsGenerating(true)
+
+    try {
+      const reportHtml = await cariService.getUnitReportHtml(b2bUnitId, startDate, endDate)
+      const printableHtml = ensureAutoPrintHtml(reportHtml, 'Cari Raporu')
+      reportPopup.document.open()
+      reportPopup.document.write(printableHtml)
+      reportPopup.document.close()
+    } catch (error) {
+      const fallbackUrl = cariService.getUnitReportUrl(b2bUnitId, startDate, endDate)
+      try {
+        reportPopup.location.href = fallbackUrl
+      } catch {
+        reportPopup.close()
+      }
+      toast({
+        title: 'Hata',
+        description: getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-report-start-date">Rapor Başlangıç Tarihi</Label>
+          <Input
+            id="b2bunit-report-start-date"
+            type="date"
+            value={startDate}
+            onChange={(event) => {
+              setStartDate(event.target.value)
+              setErrors((prev) => ({ ...prev, startDate: undefined, range: undefined }))
+            }}
+            className={errors.startDate ? 'border-destructive' : ''}
+          />
+          {errors.startDate ? <p className="text-xs text-destructive">{errors.startDate}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-report-end-date">Rapor Bitiş Tarihi</Label>
+          <Input
+            id="b2bunit-report-end-date"
+            type="date"
+            value={endDate}
+            onChange={(event) => {
+              setEndDate(event.target.value)
+              setErrors((prev) => ({ ...prev, endDate: undefined, range: undefined }))
+            }}
+            className={errors.endDate ? 'border-destructive' : ''}
+          />
+          {errors.endDate ? <p className="text-xs text-destructive">{errors.endDate}</p> : null}
+        </div>
+      </div>
+
+      {errors.range ? <p className="text-xs text-destructive">{errors.range}</p> : null}
+
+      <div className="flex justify-end">
+        <Button type="button" onClick={handleGenerateReport} disabled={isGenerating}>
+          {isGenerating ? 'Hazırlanıyor...' : 'Raporla'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+export function B2BUnitDetailReportingPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <B2BUnitReportingPanel b2bUnitId={b2bUnitId} />
 }
