@@ -113,6 +113,26 @@ export interface ManualAccountTransactionPayload {
   description?: string
 }
 
+export interface CollectionBasePayload {
+  transactionDate: string
+  facilityId?: number
+  amount: number
+  description?: string
+}
+
+export interface CashCollectionPayload extends CollectionBasePayload {
+  cashAccountId: number
+}
+
+export interface BankCollectionPayload extends CollectionBasePayload {
+  bankAccountId: number
+}
+
+export interface CheckCollectionPayload extends CollectionBasePayload {
+  dueDate: string
+  serialNumber: string
+}
+
 export interface B2BUnitInvoiceLine {
   id?: number
   productName: string
@@ -432,6 +452,37 @@ function toManualAccountTransactionPayload(payload: ManualAccountTransactionPayl
   }
 }
 
+function toCollectionBasePayload(payload: CollectionBasePayload) {
+  return {
+    transactionDate: cleanString(payload.transactionDate),
+    facilityId: cleanNumber(payload.facilityId),
+    amount: cleanNumber(payload.amount),
+    description: cleanString(payload.description),
+  }
+}
+
+function toCashCollectionPayload(payload: CashCollectionPayload) {
+  return {
+    ...toCollectionBasePayload(payload),
+    cashAccountId: cleanNumber(payload.cashAccountId),
+  }
+}
+
+function toBankCollectionPayload(payload: BankCollectionPayload) {
+  return {
+    ...toCollectionBasePayload(payload),
+    bankAccountId: cleanNumber(payload.bankAccountId),
+  }
+}
+
+function toCheckCollectionPayload(payload: CheckCollectionPayload) {
+  return {
+    ...toCollectionBasePayload(payload),
+    dueDate: cleanString(payload.dueDate),
+    serialNumber: cleanString(payload.serialNumber),
+  }
+}
+
 function toUnitPayload(payload: B2BUnitFormPayload) {
   return {
     name: payload.name.trim(),
@@ -534,6 +585,22 @@ export const cariService = {
       .then((response) => unwrapArrayResponse(response.data, true))
   },
 
+  lookupCashAccounts(query?: string): Promise<LookupOption[]> {
+    return apiClient
+      .get<ApiResponse<LookupOption[]>>('/cash-accounts/lookup', {
+        params: { query },
+      })
+      .then((response) => unwrapArrayResponse(response.data, true))
+  },
+
+  lookupBankAccounts(query?: string): Promise<LookupOption[]> {
+    return apiClient
+      .get<ApiResponse<LookupOption[]>>('/bank-accounts/lookup', {
+        params: { query },
+      })
+      .then((response) => unwrapArrayResponse(response.data, true))
+  },
+
   createPurchaseInvoice(b2bUnitId: number, payload: PurchaseInvoicePayload): Promise<B2BUnitInvoice> {
     return apiClient
       .post<ApiResponse<B2BUnitInvoiceResponse>>(
@@ -572,6 +639,66 @@ export const cariService = {
       .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
         `/b2b-units/${b2bUnitId}/account-transactions/manual-credit`,
         toManualAccountTransactionPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createCashCollection(b2bUnitId: number, payload: CashCollectionPayload): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/collections/cash`,
+        toCashCollectionPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createPaytrCollection(b2bUnitId: number, payload: CollectionBasePayload): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/collections/paytr`,
+        toCollectionBasePayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createCreditCardCollection(
+    b2bUnitId: number,
+    payload: BankCollectionPayload,
+  ): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/collections/credit-card`,
+        toBankCollectionPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createBankCollection(b2bUnitId: number, payload: BankCollectionPayload): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/collections/bank`,
+        toBankCollectionPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createCheckCollection(b2bUnitId: number, payload: CheckCollectionPayload): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/collections/check`,
+        toCheckCollectionPayload(payload),
+      )
+      .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createPromissoryNoteCollection(
+    b2bUnitId: number,
+    payload: CheckCollectionPayload,
+  ): Promise<B2BUnitTransaction> {
+    return apiClient
+      .post<ApiResponse<B2BUnitTransactionResponseRaw>>(
+        `/b2b-units/${b2bUnitId}/collections/promissory-note`,
+        toCheckCollectionPayload(payload),
       )
       .then((response) => normalizeTransaction(unwrapResponse(response.data)))
   },

@@ -12,10 +12,15 @@ import {
   type B2BUnitDetailMenuKey,
 } from './cari.service'
 import {
-  B2BUnitDetailCollectionPanel,
+  B2BUnitBankCollectionPanel,
+  B2BUnitCashCollectionPanel,
+  B2BUnitCheckCollectionPanel,
   B2BUnitDetailFilterPanel,
+  B2BUnitCreditCardCollectionPanel,
   B2BUnitManualCreditPanel,
   B2BUnitManualDebitPanel,
+  B2BUnitPaytrCollectionPanel,
+  B2BUnitPromissoryNoteCollectionPanel,
   B2BUnitPurchaseInvoicePanel,
   B2BUnitDetailPaymentPanel,
   B2BUnitDetailReportingPanel,
@@ -37,6 +42,12 @@ type DetailPanelKey =
   | 'salesInvoice'
   | 'manualDebit'
   | 'manualCredit'
+  | 'cashCollection'
+  | 'paytrCollection'
+  | 'creditCardCollection'
+  | 'bankCollection'
+  | 'checkCollection'
+  | 'promissoryNoteCollection'
 
 const INVOICE_SUBMENU_LABELS: Record<'purchaseInvoice' | 'salesInvoice', string> = {
   purchaseInvoice: 'Alış Yap',
@@ -46,6 +57,23 @@ const INVOICE_SUBMENU_LABELS: Record<'purchaseInvoice' | 'salesInvoice', string>
 const ACCOUNT_SUBMENU_LABELS: Record<'manualDebit' | 'manualCredit', string> = {
   manualDebit: 'Cari Borçlandır',
   manualCredit: 'Cari Alacaklandır',
+}
+
+const COLLECTION_SUBMENU_LABELS: Record<
+  | 'cashCollection'
+  | 'paytrCollection'
+  | 'creditCardCollection'
+  | 'bankCollection'
+  | 'checkCollection'
+  | 'promissoryNoteCollection',
+  string
+> = {
+  cashCollection: 'Nakit Tahsilat',
+  paytrCollection: 'PayTR Tahsilat',
+  creditCardCollection: 'Kredi Kartı Tahsilat',
+  bankCollection: 'Banka Tahsilat',
+  checkCollection: 'Çek Tahsilat',
+  promissoryNoteCollection: 'Senet Tahsilat',
 }
 
 function formatAmount(value: number): string {
@@ -63,7 +91,13 @@ function renderPanel(menu: DetailPanelKey, b2bUnitId: number) {
   if (menu === 'accountTransactions') return <B2BUnitManualDebitPanel b2bUnitId={b2bUnitId} />
   if (menu === 'manualDebit') return <B2BUnitManualDebitPanel b2bUnitId={b2bUnitId} />
   if (menu === 'manualCredit') return <B2BUnitManualCreditPanel b2bUnitId={b2bUnitId} />
-  if (menu === 'collection') return <B2BUnitDetailCollectionPanel />
+  if (menu === 'collection') return <B2BUnitCashCollectionPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'cashCollection') return <B2BUnitCashCollectionPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'paytrCollection') return <B2BUnitPaytrCollectionPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'creditCardCollection') return <B2BUnitCreditCardCollectionPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'bankCollection') return <B2BUnitBankCollectionPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'checkCollection') return <B2BUnitCheckCollectionPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'promissoryNoteCollection') return <B2BUnitPromissoryNoteCollectionPanel b2bUnitId={b2bUnitId} />
   if (menu === 'payment') return <B2BUnitDetailPaymentPanel />
   return <B2BUnitDetailReportingPanel />
 }
@@ -93,6 +127,7 @@ export function B2BUnitDetailPage() {
     return menus.filter((menu) => {
       if (menu.key === 'invoice') return canUseFinancePanels
       if (menu.key === 'accountTransactions') return canUseFinancePanels
+      if (menu.key === 'collection') return canUseFinancePanels
       return true
     })
   }, [canUseFinancePanels, menus])
@@ -100,12 +135,24 @@ export function B2BUnitDetailPage() {
   const [activeMenu, setActiveMenu] = useState<DetailPanelKey>('filter')
   const [invoiceExpanded, setInvoiceExpanded] = useState(false)
   const [accountExpanded, setAccountExpanded] = useState(false)
+  const [collectionExpanded, setCollectionExpanded] = useState(false)
 
   useEffect(() => {
     const validKeys: DetailPanelKey[] = [
       ...(visibleMenus.map((menu) => menu.key) as B2BUnitDetailMenuKey[]),
       ...(canUseFinancePanels
-        ? (['purchaseInvoice', 'salesInvoice', 'manualDebit', 'manualCredit'] as const)
+        ? ([
+            'purchaseInvoice',
+            'salesInvoice',
+            'manualDebit',
+            'manualCredit',
+            'cashCollection',
+            'paytrCollection',
+            'creditCardCollection',
+            'bankCollection',
+            'checkCollection',
+            'promissoryNoteCollection',
+          ] as const)
         : []),
     ]
 
@@ -117,6 +164,9 @@ export function B2BUnitDetailPage() {
       } else if (firstVisibleMenu === 'accountTransactions' && canUseFinancePanels) {
         setAccountExpanded(true)
         setActiveMenu('manualDebit')
+      } else if (firstVisibleMenu === 'collection' && canUseFinancePanels) {
+        setCollectionExpanded(true)
+        setActiveMenu('cashCollection')
       } else {
         setActiveMenu((firstVisibleMenu || 'filter') as DetailPanelKey)
       }
@@ -125,8 +175,16 @@ export function B2BUnitDetailPage() {
 
   const isInvoiceChildActive = activeMenu === 'purchaseInvoice' || activeMenu === 'salesInvoice'
   const isAccountChildActive = activeMenu === 'manualDebit' || activeMenu === 'manualCredit'
+  const isCollectionChildActive =
+    activeMenu === 'cashCollection' ||
+    activeMenu === 'paytrCollection' ||
+    activeMenu === 'creditCardCollection' ||
+    activeMenu === 'bankCollection' ||
+    activeMenu === 'checkCollection' ||
+    activeMenu === 'promissoryNoteCollection'
   const showInvoiceChildren = canUseFinancePanels && (invoiceExpanded || isInvoiceChildActive)
   const showAccountChildren = canUseFinancePanels && (accountExpanded || isAccountChildActive)
+  const showCollectionChildren = canUseFinancePanels && (collectionExpanded || isCollectionChildActive)
 
   const activeMenuLabel = useMemo(() => {
     if (activeMenu === 'purchaseInvoice' || activeMenu === 'salesInvoice') {
@@ -134,6 +192,16 @@ export function B2BUnitDetailPage() {
     }
     if (activeMenu === 'manualDebit' || activeMenu === 'manualCredit') {
       return ACCOUNT_SUBMENU_LABELS[activeMenu]
+    }
+    if (
+      activeMenu === 'cashCollection' ||
+      activeMenu === 'paytrCollection' ||
+      activeMenu === 'creditCardCollection' ||
+      activeMenu === 'bankCollection' ||
+      activeMenu === 'checkCollection' ||
+      activeMenu === 'promissoryNoteCollection'
+    ) {
+      return COLLECTION_SUBMENU_LABELS[activeMenu]
     }
     return visibleMenus.find((item) => item.key === activeMenu)?.label || 'Detay'
   }, [activeMenu, visibleMenus])
@@ -323,6 +391,107 @@ export function B2BUnitDetailPage() {
                           )}
                         >
                           Cari Alacaklandır
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              }
+
+              if (menu.key === 'collection') {
+                return (
+                  <div key={menu.key} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCollectionExpanded(true)
+                        if (!isCollectionChildActive) {
+                          setActiveMenu('cashCollection')
+                        }
+                      }}
+                      className={cn(
+                        'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                        isCollectionChildActive
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-muted text-foreground',
+                      )}
+                    >
+                      {menu.label}
+                    </button>
+
+                    {showCollectionChildren ? (
+                      <div className="space-y-1 pl-3">
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('cashCollection')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'cashCollection'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Nakit Tahsilat
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('paytrCollection')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'paytrCollection'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          PayTR Tahsilat
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('creditCardCollection')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'creditCardCollection'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Kredi Kartı Tahsilat
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('bankCollection')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'bankCollection'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Banka Tahsilat
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('checkCollection')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'checkCollection'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Çek Tahsilat
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenu('promissoryNoteCollection')}
+                          className={cn(
+                            'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                            activeMenu === 'promissoryNoteCollection'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground',
+                          )}
+                        >
+                          Senet Tahsilat
                         </button>
                       </div>
                     ) : null}

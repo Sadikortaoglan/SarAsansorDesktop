@@ -35,6 +35,10 @@ import { PaginatedTable } from '@/modules/shared/components/PaginatedTable'
 import {
   cariService,
   type B2BUnitInvoiceLinePayload,
+  type BankCollectionPayload,
+  type CashCollectionPayload,
+  type CheckCollectionPayload,
+  type CollectionBasePayload,
   type ManualAccountTransactionPayload,
   type B2BUnitTransaction,
 } from './cari.service'
@@ -87,6 +91,18 @@ interface ManualAccountTransactionErrors {
   amount?: string
   facilityId?: string
 }
+
+interface CollectionFormErrors {
+  transactionDate?: string
+  amount?: string
+  facilityId?: string
+  cashAccountId?: string
+  bankAccountId?: string
+  dueDate?: string
+  serialNumber?: string
+}
+
+type CollectionMode = 'cash' | 'paytr' | 'creditCard' | 'bank' | 'check' | 'promissoryNote'
 
 interface B2BUnitDetailPanelProps {
   b2bUnitId: number
@@ -282,6 +298,50 @@ function parseManualAccountTransactionErrors(error: unknown): ManualAccountTrans
     }
     if (message.includes('amount must be greater than zero')) {
       mapped.amount = "Tutar 0'dan büyük olmalı."
+    }
+    if (message.includes('facility does not belong')) {
+      mapped.facilityId = 'Seçilen tesis bu cariye ait değil.'
+    }
+  })
+
+  return mapped
+}
+
+function parseCollectionFieldErrors(error: unknown, mode: CollectionMode): CollectionFormErrors {
+  const mapped: CollectionFormErrors = {}
+  if (!(error instanceof AxiosError)) return mapped
+
+  const responseData = error.response?.data as ApiResponse<unknown> | undefined
+  const messages = [
+    ...(Array.isArray(responseData?.errors) ? responseData.errors : []),
+    responseData?.message || '',
+  ].filter(Boolean)
+
+  messages.forEach((rawMessage) => {
+    const message = `${rawMessage || ''}`.toLowerCase()
+    if (message.includes('transactiondate')) {
+      mapped.transactionDate = 'Tarih zorunlu.'
+    }
+    if (message.includes('facilityid')) {
+      mapped.facilityId = 'Tesis (Bina) seçimi zorunlu.'
+    }
+    if (message.includes('amount is required')) {
+      mapped.amount = 'Tutar zorunlu.'
+    }
+    if (message.includes('amount must be greater than zero')) {
+      mapped.amount = "Tutar 0'dan büyük olmalı."
+    }
+    if (message.includes('cashaccountid')) {
+      mapped.cashAccountId = 'Kasa seçimi zorunlu.'
+    }
+    if (message.includes('bankaccountid')) {
+      mapped.bankAccountId = 'Banka seçimi zorunlu.'
+    }
+    if (message.includes('duedate')) {
+      mapped.dueDate = 'Vade tarihi zorunlu.'
+    }
+    if (message.includes('serialnumber')) {
+      mapped.serialNumber = mode === 'promissoryNote' ? 'Senet seri no zorunlu.' : 'Çek seri no zorunlu.'
     }
     if (message.includes('facility does not belong')) {
       mapped.facilityId = 'Seçilen tesis bu cariye ait değil.'
@@ -1357,6 +1417,378 @@ export function B2BUnitManualCreditPanel({ b2bUnitId }: B2BUnitDetailPanelProps)
   return <ManualAccountTransactionForm b2bUnitId={b2bUnitId} mode="credit" />
 }
 
+function getCollectionSuccessMessage(mode: CollectionMode): string {
+  if (mode === 'cash') return 'Nakit tahsilat işlemi başarıyla kaydedildi.'
+  if (mode === 'paytr') return 'PayTR tahsilat işlemi başarıyla kaydedildi.'
+  if (mode === 'creditCard') return 'Kredi kartı tahsilat işlemi başarıyla kaydedildi.'
+  if (mode === 'bank') return 'Banka tahsilat işlemi başarıyla kaydedildi.'
+  if (mode === 'check') return 'Çek tahsilat işlemi başarıyla kaydedildi.'
+  return 'Senet tahsilat işlemi başarıyla kaydedildi.'
+}
+
+function CollectionTransactionForm({
+  b2bUnitId,
+  mode,
+}: {
+  b2bUnitId: number
+  mode: CollectionMode
+}) {
+  const { hasAnyRole } = useAuth()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const canManageCollections = hasAnyRole(['STAFF_USER'])
+
+  const requiresCashAccount = mode === 'cash'
+  const requiresBankAccount = mode === 'creditCard' || mode === 'bank'
+  const requiresDueDate = mode === 'check' || mode === 'promissoryNote'
+  const requiresSerialNumber = mode === 'check' || mode === 'promissoryNote'
+  const showDescription = mode !== 'paytr'
+
+  const [transactionDate, setTransactionDate] = useState(toInputDate(new Date()))
+  const [facilityId, setFacilityId] = useState<number | undefined>(undefined)
+  const [amountInput, setAmountInput] = useState('')
+  const [cashAccountId, setCashAccountId] = useState<number | undefined>(undefined)
+  const [bankAccountId, setBankAccountId] = useState<number | undefined>(undefined)
+  const [dueDate, setDueDate] = useState('')
+  const [serialNumber, setSerialNumber] = useState('')
+  const [description, setDescription] = useState('')
+  const [errors, setErrors] = useState<CollectionFormErrors>({})
+
+  const facilitiesQuery = useQuery({
+    queryKey: ['facilities', 'lookup', 'b2bunit-collection', b2bUnitId],
+    queryFn: () => cariService.lookupFacilities(b2bUnitId),
+    enabled: canManageCollections,
+  })
+
+  const cashAccountsQuery = useQuery({
+    queryKey: ['cash-accounts', 'lookup', 'b2bunit-collection'],
+    queryFn: () => cariService.lookupCashAccounts(),
+    enabled: canManageCollections && requiresCashAccount,
+  })
+
+  const bankAccountsQuery = useQuery({
+    queryKey: ['bank-accounts', 'lookup', 'b2bunit-collection'],
+    queryFn: () => cariService.lookupBankAccounts(),
+    enabled: canManageCollections && requiresBankAccount,
+  })
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const amount = parseNumericInput(amountInput)
+      const trimmedDescription = description.trim() || undefined
+
+      if (mode === 'cash') {
+        const payload: CashCollectionPayload = {
+          transactionDate,
+          facilityId,
+          amount,
+          cashAccountId: Number(cashAccountId),
+          description: trimmedDescription,
+        }
+        return cariService.createCashCollection(b2bUnitId, payload)
+      }
+
+      if (mode === 'paytr') {
+        const payload: CollectionBasePayload = {
+          transactionDate,
+          facilityId,
+          amount,
+        }
+        return cariService.createPaytrCollection(b2bUnitId, payload)
+      }
+
+      if (mode === 'creditCard') {
+        const payload: BankCollectionPayload = {
+          transactionDate,
+          facilityId,
+          amount,
+          bankAccountId: Number(bankAccountId),
+          description: trimmedDescription,
+        }
+        return cariService.createCreditCardCollection(b2bUnitId, payload)
+      }
+
+      if (mode === 'bank') {
+        const payload: BankCollectionPayload = {
+          transactionDate,
+          facilityId,
+          amount,
+          bankAccountId: Number(bankAccountId),
+          description: trimmedDescription,
+        }
+        return cariService.createBankCollection(b2bUnitId, payload)
+      }
+
+      const checkPayload: CheckCollectionPayload = {
+        transactionDate,
+        facilityId,
+        dueDate,
+        serialNumber: serialNumber.trim(),
+        amount,
+        description: trimmedDescription,
+      }
+
+      if (mode === 'check') {
+        return cariService.createCheckCollection(b2bUnitId, checkPayload)
+      }
+
+      return cariService.createPromissoryNoteCollection(b2bUnitId, checkPayload)
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Başarılı',
+        description: getCollectionSuccessMessage(mode),
+        variant: 'success',
+      })
+      setAmountInput('')
+      setDescription('')
+      setSerialNumber('')
+      setErrors({})
+      queryClient.invalidateQueries({ queryKey: ['b2bunits', 'transactions', b2bUnitId] })
+    },
+    onError: (error) => {
+      setErrors(parseCollectionFieldErrors(error, mode))
+      toast({
+        title: 'Hata',
+        description: getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const handleSave = () => {
+    const nextErrors: CollectionFormErrors = {}
+    const amountValue = parseNumericInput(amountInput)
+
+    if (!transactionDate) {
+      nextErrors.transactionDate = 'Tarih zorunlu.'
+    }
+    if (!amountInput.trim()) {
+      nextErrors.amount = 'Tutar zorunlu.'
+    } else if (!(amountValue > 0)) {
+      nextErrors.amount = "Tutar 0'dan büyük olmalı."
+    }
+    if (requiresCashAccount && !cashAccountId) {
+      nextErrors.cashAccountId = 'Kasa seçimi zorunlu.'
+    }
+    if (requiresBankAccount && !bankAccountId) {
+      nextErrors.bankAccountId = 'Banka seçimi zorunlu.'
+    }
+    if (requiresDueDate && !dueDate) {
+      nextErrors.dueDate = 'Vade tarihi zorunlu.'
+    }
+    if (requiresSerialNumber && !serialNumber.trim()) {
+      nextErrors.serialNumber = mode === 'promissoryNote' ? 'Senet seri no zorunlu.' : 'Çek seri no zorunlu.'
+    }
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      setErrors(nextErrors)
+      toast({
+        title: 'Hata',
+        description: 'Lütfen zorunlu alanları kontrol edin.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    mutation.mutate()
+  }
+
+  if (!canManageCollections) {
+    return renderUnauthorizedMessage()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`collection-${mode}-date`}>Tarih</Label>
+          <Input
+            id={`collection-${mode}-date`}
+            type="date"
+            value={transactionDate}
+            onChange={(event) => {
+              setTransactionDate(event.target.value)
+              setErrors((prev) => ({ ...prev, transactionDate: undefined }))
+            }}
+            className={errors.transactionDate ? 'border-destructive' : ''}
+          />
+          {errors.transactionDate ? <p className="text-xs text-destructive">{errors.transactionDate}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tesis (Bina) Seç</Label>
+          <Select
+            value={facilityId ? String(facilityId) : undefined}
+            onValueChange={(value) => {
+              setFacilityId(Number(value))
+              setErrors((prev) => ({ ...prev, facilityId: undefined }))
+            }}
+          >
+            <SelectTrigger className={errors.facilityId ? 'border-destructive' : ''}>
+              <SelectValue placeholder="Tesis (Bina) seçin" />
+            </SelectTrigger>
+            <SelectContent>
+              {(facilitiesQuery.data || []).map((facility) => (
+                <SelectItem key={facility.id} value={String(facility.id)}>
+                  {facility.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.facilityId ? <p className="text-xs text-destructive">{errors.facilityId}</p> : null}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {requiresDueDate ? (
+          <div className="space-y-2">
+            <Label htmlFor={`collection-${mode}-due-date`}>Vade Tarihi</Label>
+            <Input
+              id={`collection-${mode}-due-date`}
+              type="date"
+              value={dueDate}
+              onChange={(event) => {
+                setDueDate(event.target.value)
+                setErrors((prev) => ({ ...prev, dueDate: undefined }))
+              }}
+              className={errors.dueDate ? 'border-destructive' : ''}
+            />
+            {errors.dueDate ? <p className="text-xs text-destructive">{errors.dueDate}</p> : null}
+          </div>
+        ) : null}
+
+        {requiresSerialNumber ? (
+          <div className="space-y-2">
+            <Label htmlFor={`collection-${mode}-serial-number`}>
+              {mode === 'promissoryNote' ? 'Senet Seri No' : 'Çek Seri No'}
+            </Label>
+            <Input
+              id={`collection-${mode}-serial-number`}
+              value={serialNumber}
+              onChange={(event) => {
+                setSerialNumber(event.target.value)
+                setErrors((prev) => ({ ...prev, serialNumber: undefined }))
+              }}
+              className={errors.serialNumber ? 'border-destructive' : ''}
+            />
+            {errors.serialNumber ? <p className="text-xs text-destructive">{errors.serialNumber}</p> : null}
+          </div>
+        ) : null}
+
+        <div className="space-y-2">
+          <Label htmlFor={`collection-${mode}-amount`}>Tutar</Label>
+          <Input
+            id={`collection-${mode}-amount`}
+            type="number"
+            min="0"
+            step="0.01"
+            value={amountInput}
+            onChange={(event) => {
+              setAmountInput(event.target.value)
+              setErrors((prev) => ({ ...prev, amount: undefined }))
+            }}
+            className={errors.amount ? 'border-destructive' : ''}
+          />
+          {errors.amount ? <p className="text-xs text-destructive">{errors.amount}</p> : null}
+        </div>
+
+        {requiresCashAccount ? (
+          <div className="space-y-2">
+            <Label>Kasa Seç</Label>
+            <Select
+              value={cashAccountId ? String(cashAccountId) : undefined}
+              onValueChange={(value) => {
+                setCashAccountId(Number(value))
+                setErrors((prev) => ({ ...prev, cashAccountId: undefined }))
+              }}
+            >
+              <SelectTrigger className={errors.cashAccountId ? 'border-destructive' : ''}>
+                <SelectValue placeholder="Kasa seçin" />
+              </SelectTrigger>
+              <SelectContent>
+                {(cashAccountsQuery.data || []).map((cashAccount) => (
+                  <SelectItem key={cashAccount.id} value={String(cashAccount.id)}>
+                    {cashAccount.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.cashAccountId ? <p className="text-xs text-destructive">{errors.cashAccountId}</p> : null}
+          </div>
+        ) : null}
+
+        {requiresBankAccount ? (
+          <div className="space-y-2">
+            <Label>Banka Seç</Label>
+            <Select
+              value={bankAccountId ? String(bankAccountId) : undefined}
+              onValueChange={(value) => {
+                setBankAccountId(Number(value))
+                setErrors((prev) => ({ ...prev, bankAccountId: undefined }))
+              }}
+            >
+              <SelectTrigger className={errors.bankAccountId ? 'border-destructive' : ''}>
+                <SelectValue placeholder="Banka seçin" />
+              </SelectTrigger>
+              <SelectContent>
+                {(bankAccountsQuery.data || []).map((bankAccount) => (
+                  <SelectItem key={bankAccount.id} value={String(bankAccount.id)}>
+                    {bankAccount.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.bankAccountId ? <p className="text-xs text-destructive">{errors.bankAccountId}</p> : null}
+          </div>
+        ) : null}
+      </div>
+
+      {showDescription ? (
+        <div className="space-y-2">
+          <Label htmlFor={`collection-${mode}-description`}>Açıklama</Label>
+          <Textarea
+            id={`collection-${mode}-description`}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            rows={4}
+          />
+        </div>
+      ) : null}
+
+      <div className="flex justify-end">
+        <Button type="button" onClick={handleSave} disabled={mutation.isPending}>
+          {mutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+export function B2BUnitCashCollectionPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <CollectionTransactionForm b2bUnitId={b2bUnitId} mode="cash" />
+}
+
+export function B2BUnitPaytrCollectionPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <CollectionTransactionForm b2bUnitId={b2bUnitId} mode="paytr" />
+}
+
+export function B2BUnitCreditCardCollectionPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <CollectionTransactionForm b2bUnitId={b2bUnitId} mode="creditCard" />
+}
+
+export function B2BUnitBankCollectionPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <CollectionTransactionForm b2bUnitId={b2bUnitId} mode="bank" />
+}
+
+export function B2BUnitCheckCollectionPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <CollectionTransactionForm b2bUnitId={b2bUnitId} mode="check" />
+}
+
+export function B2BUnitPromissoryNoteCollectionPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <CollectionTransactionForm b2bUnitId={b2bUnitId} mode="promissoryNote" />
+}
+
 export function B2BUnitDetailInvoicePanel() {
   return <h2 className="text-lg font-semibold">Fatura</h2>
 }
@@ -1365,8 +1797,8 @@ export function B2BUnitDetailAccountTransactionsPanel() {
   return <h2 className="text-lg font-semibold">Cari İşlemler</h2>
 }
 
-export function B2BUnitDetailCollectionPanel() {
-  return <h2 className="text-lg font-semibold">Tahsilat</h2>
+export function B2BUnitDetailCollectionPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
+  return <B2BUnitCashCollectionPanel b2bUnitId={b2bUnitId} />
 }
 
 export function B2BUnitDetailPaymentPanel() {
