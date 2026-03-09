@@ -21,6 +21,8 @@ import {
   B2BUnitDetailFilterPanel,
   B2BUnitCreditCardCollectionPanel,
   B2BUnitCreditCardPaymentPanel,
+  B2BUnitFacilityCreatePanel,
+  B2BUnitFacilityListPanel,
   B2BUnitManualCreditPanel,
   B2BUnitManualDebitPanel,
   B2BUnitPaytrCollectionPanel,
@@ -57,6 +59,8 @@ type DetailPanelKey =
   | 'bankPayment'
   | 'checkPayment'
   | 'promissoryNotePayment'
+  | 'facilityList'
+  | 'facilityCreate'
 
 const INVOICE_SUBMENU_LABELS: Record<'purchaseInvoice' | 'salesInvoice', string> = {
   purchaseInvoice: 'Alış Yap',
@@ -96,6 +100,11 @@ const PAYMENT_SUBMENU_LABELS: Record<
   promissoryNotePayment: 'Senet Ödeme',
 }
 
+const FACILITY_SUBMENU_LABELS: Record<'facilityList' | 'facilityCreate', string> = {
+  facilityList: 'Tesisler (Binalar)',
+  facilityCreate: 'Tesis (Bina) Ekle',
+}
+
 function formatAmount(value: number): string {
   return value.toLocaleString('tr-TR', {
     minimumFractionDigits: 2,
@@ -103,7 +112,16 @@ function formatAmount(value: number): string {
   })
 }
 
-function renderPanel(menu: DetailPanelKey, b2bUnitId: number) {
+function renderPanel(
+  menu: DetailPanelKey,
+  b2bUnitId: number,
+  options: {
+    editingFacilityId: number | null
+    onOpenCreateFacility: () => void
+    onOpenEditFacility: (facilityId: number) => void
+    onFacilitySaved: () => void
+  },
+) {
   if (menu === 'filter') return <B2BUnitDetailFilterPanel b2bUnitId={b2bUnitId} />
   if (menu === 'invoice') return <B2BUnitPurchaseInvoicePanel b2bUnitId={b2bUnitId} />
   if (menu === 'purchaseInvoice') return <B2BUnitPurchaseInvoicePanel b2bUnitId={b2bUnitId} />
@@ -124,6 +142,24 @@ function renderPanel(menu: DetailPanelKey, b2bUnitId: number) {
   if (menu === 'bankPayment') return <B2BUnitBankPaymentPanel b2bUnitId={b2bUnitId} />
   if (menu === 'checkPayment') return <B2BUnitCheckPaymentPanel b2bUnitId={b2bUnitId} />
   if (menu === 'promissoryNotePayment') return <B2BUnitPromissoryNotePaymentPanel b2bUnitId={b2bUnitId} />
+  if (menu === 'facilityList') {
+    return (
+      <B2BUnitFacilityListPanel
+        b2bUnitId={b2bUnitId}
+        onOpenCreate={options.onOpenCreateFacility}
+        onOpenEdit={options.onOpenEditFacility}
+      />
+    )
+  }
+  if (menu === 'facilityCreate') {
+    return (
+      <B2BUnitFacilityCreatePanel
+        b2bUnitId={b2bUnitId}
+        facilityId={options.editingFacilityId}
+        onSaved={options.onFacilitySaved}
+      />
+    )
+  }
   return <B2BUnitReportingPanel b2bUnitId={b2bUnitId} />
 }
 
@@ -134,6 +170,7 @@ export function B2BUnitDetailPage() {
   const parsedId = Number(id)
   const isValidId = Number.isFinite(parsedId) && parsedId > 0
   const canUseFinancePanels = hasAnyRole(['STAFF_USER'])
+  const canManageFacilities = hasAnyRole(['STAFF_USER'])
 
   const detailQuery = useQuery({
     queryKey: ['b2bunits', 'detail', parsedId],
@@ -163,6 +200,8 @@ export function B2BUnitDetailPage() {
   const [accountExpanded, setAccountExpanded] = useState(false)
   const [collectionExpanded, setCollectionExpanded] = useState(false)
   const [paymentExpanded, setPaymentExpanded] = useState(false)
+  const [facilityExpanded, setFacilityExpanded] = useState(false)
+  const [editingFacilityId, setEditingFacilityId] = useState<number | null>(null)
 
   useEffect(() => {
     const validKeys: DetailPanelKey[] = [
@@ -186,6 +225,8 @@ export function B2BUnitDetailPage() {
             'promissoryNotePayment',
           ] as const)
         : []),
+      'facilityList',
+      ...(canManageFacilities ? (['facilityCreate'] as const) : []),
     ]
 
     if (!validKeys.includes(activeMenu)) {
@@ -206,7 +247,7 @@ export function B2BUnitDetailPage() {
         setActiveMenu((firstVisibleMenu || 'filter') as DetailPanelKey)
       }
     }
-  }, [activeMenu, canUseFinancePanels, visibleMenus])
+  }, [activeMenu, canManageFacilities, canUseFinancePanels, visibleMenus])
 
   const isInvoiceChildActive = activeMenu === 'purchaseInvoice' || activeMenu === 'salesInvoice'
   const isAccountChildActive = activeMenu === 'manualDebit' || activeMenu === 'manualCredit'
@@ -223,10 +264,34 @@ export function B2BUnitDetailPage() {
     activeMenu === 'bankPayment' ||
     activeMenu === 'checkPayment' ||
     activeMenu === 'promissoryNotePayment'
+  const isFacilityChildActive = activeMenu === 'facilityList' || activeMenu === 'facilityCreate'
   const showInvoiceChildren = canUseFinancePanels && (invoiceExpanded || isInvoiceChildActive)
   const showAccountChildren = canUseFinancePanels && (accountExpanded || isAccountChildActive)
   const showCollectionChildren = canUseFinancePanels && (collectionExpanded || isCollectionChildActive)
   const showPaymentChildren = canUseFinancePanels && (paymentExpanded || isPaymentChildActive)
+  const showFacilityChildren = facilityExpanded || isFacilityChildActive
+
+  const handleOpenFacilityList = () => {
+    setFacilityExpanded(true)
+    setActiveMenu('facilityList')
+  }
+
+  const handleOpenFacilityCreate = () => {
+    setFacilityExpanded(true)
+    setEditingFacilityId(null)
+    setActiveMenu('facilityCreate')
+  }
+
+  const handleOpenFacilityEdit = (facilityId: number) => {
+    setFacilityExpanded(true)
+    setEditingFacilityId(facilityId)
+    setActiveMenu('facilityCreate')
+  }
+
+  const handleFacilitySaved = () => {
+    setEditingFacilityId(null)
+    setActiveMenu('facilityList')
+  }
 
   const activeMenuLabel = useMemo(() => {
     if (activeMenu === 'purchaseInvoice' || activeMenu === 'salesInvoice') {
@@ -253,6 +318,9 @@ export function B2BUnitDetailPage() {
       activeMenu === 'promissoryNotePayment'
     ) {
       return PAYMENT_SUBMENU_LABELS[activeMenu]
+    }
+    if (activeMenu === 'facilityList' || activeMenu === 'facilityCreate') {
+      return FACILITY_SUBMENU_LABELS[activeMenu]
     }
     return visibleMenus.find((item) => item.key === activeMenu)?.label || 'Detay'
   }, [activeMenu, visibleMenus])
@@ -337,13 +405,14 @@ export function B2BUnitDetailPage() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Menü</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            {visibleMenus.map((menu) => {
-              if (menu.key === 'invoice') {
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Menü</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              {visibleMenus.map((menu) => {
+                if (menu.key === 'invoice') {
                 return (
                   <div key={menu.key} className="space-y-1">
                     <button
@@ -655,14 +724,77 @@ export function B2BUnitDetailPage() {
                 </button>
               )
             })}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Asansör İşlemleri</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setFacilityExpanded(true)
+                  if (!isFacilityChildActive) {
+                    setActiveMenu('facilityList')
+                  }
+                }}
+                className={cn(
+                  'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                  isFacilityChildActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-muted text-foreground',
+                )}
+              >
+                Tesisler (Binalar)
+              </button>
+              {showFacilityChildren ? (
+                <div className="space-y-1 pl-3">
+                  <button
+                    type="button"
+                    onClick={handleOpenFacilityList}
+                    className={cn(
+                      'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                      activeMenu === 'facilityList'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted text-foreground',
+                    )}
+                  >
+                    Tesisler (Binalar)
+                  </button>
+                  {canManageFacilities ? (
+                    <button
+                      type="button"
+                      onClick={handleOpenFacilityCreate}
+                      className={cn(
+                        'w-full rounded-md px-3 py-2 text-left text-sm transition',
+                        activeMenu === 'facilityCreate'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-muted text-foreground',
+                      )}
+                    >
+                      Tesis (Bina) Ekle
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{activeMenuLabel}</CardTitle>
           </CardHeader>
-          <CardContent>{renderPanel(activeMenu, detail.id || parsedId)}</CardContent>
+          <CardContent>
+            {renderPanel(activeMenu, detail.id || parsedId, {
+              editingFacilityId,
+              onOpenCreateFacility: handleOpenFacilityCreate,
+              onOpenEditFacility: handleOpenFacilityEdit,
+              onFacilitySaved: handleFacilitySaved,
+            })}
+          </CardContent>
         </Card>
       </div>
     </div>

@@ -88,6 +88,73 @@ export interface LookupOption {
   name: string
 }
 
+export interface B2BUnitFacility {
+  id?: number
+  name: string
+  b2bUnitId?: number | null
+  b2bUnitName?: string | null
+  taxNumber?: string | null
+  taxOffice?: string | null
+  type?: string | null
+  invoiceType?: string | null
+  companyTitle?: string | null
+  authorizedFirstName?: string | null
+  authorizedLastName?: string | null
+  email?: string | null
+  phone?: string | null
+  facilityType?: string | null
+  attendantFullName?: string | null
+  managerFlatNo?: string | null
+  doorPassword?: string | null
+  floorCount?: number | null
+  cityId?: number | null
+  cityName?: string | null
+  districtId?: number | null
+  districtName?: string | null
+  neighborhoodId?: number | null
+  neighborhoodName?: string | null
+  regionId?: number | null
+  regionName?: string | null
+  addressText?: string | null
+  description?: string | null
+  status?: string | null
+  mapLat?: number | null
+  mapLng?: number | null
+  mapAddressQuery?: string | null
+  attachmentUrl?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface B2BUnitFacilityFormPayload {
+  name: string
+  taxNumber?: string
+  taxOffice?: string
+  type?: string
+  invoiceType?: string
+  companyTitle?: string
+  authorizedFirstName?: string
+  authorizedLastName?: string
+  email?: string
+  phone?: string
+  facilityType?: string
+  attendantFullName?: string
+  managerFlatNo?: string
+  doorPassword?: string
+  floorCount?: number
+  cityId?: number
+  districtId?: number
+  neighborhoodId?: number
+  regionId?: number
+  addressText?: string
+  description?: string
+  status?: string
+  mapLat?: number
+  mapLng?: number
+  mapAddressQuery?: string
+  attachmentUrl?: string
+}
+
 export interface B2BUnitInvoiceLinePayload {
   productName: string
   quantity: number
@@ -200,6 +267,14 @@ interface ListB2BUnitTransactionsParams {
   page: number
   size: number
   search?: string
+  sort?: string
+}
+
+interface ListB2BUnitFacilitiesParams {
+  query?: string
+  search?: string
+  page: number
+  size: number
   sort?: string
 }
 
@@ -536,6 +611,53 @@ function toUnitPayload(payload: B2BUnitFormPayload) {
   }
 }
 
+function normalizeB2BUnitFacility(raw: B2BUnitFacility): B2BUnitFacility {
+  return {
+    ...raw,
+    type: raw.type || 'TUZEL_KISI',
+    invoiceType: raw.invoiceType || 'TICARI_FATURA',
+    status: raw.status || 'ACTIVE',
+    floorCount: raw.floorCount != null ? Number(raw.floorCount) : null,
+    mapLat: raw.mapLat != null ? Number(raw.mapLat) : null,
+    mapLng: raw.mapLng != null ? Number(raw.mapLng) : null,
+    cityId: raw.cityId != null ? Number(raw.cityId) : null,
+    districtId: raw.districtId != null ? Number(raw.districtId) : null,
+    neighborhoodId: raw.neighborhoodId != null ? Number(raw.neighborhoodId) : null,
+    regionId: raw.regionId != null ? Number(raw.regionId) : null,
+  }
+}
+
+function toB2BUnitFacilityPayload(payload: B2BUnitFacilityFormPayload): B2BUnitFacilityFormPayload {
+  return {
+    name: payload.name.trim(),
+    taxNumber: cleanString(payload.taxNumber),
+    taxOffice: cleanString(payload.taxOffice),
+    type: cleanString(payload.type) || 'TUZEL_KISI',
+    invoiceType: cleanString(payload.invoiceType) || 'TICARI_FATURA',
+    companyTitle: cleanString(payload.companyTitle),
+    authorizedFirstName: cleanString(payload.authorizedFirstName),
+    authorizedLastName: cleanString(payload.authorizedLastName),
+    email: cleanString(payload.email),
+    phone: cleanString(payload.phone),
+    facilityType: cleanString(payload.facilityType),
+    attendantFullName: cleanString(payload.attendantFullName),
+    managerFlatNo: cleanString(payload.managerFlatNo),
+    doorPassword: cleanString(payload.doorPassword),
+    floorCount: cleanNumber(payload.floorCount),
+    cityId: cleanNumber(payload.cityId),
+    districtId: cleanNumber(payload.districtId),
+    neighborhoodId: cleanNumber(payload.neighborhoodId),
+    regionId: cleanNumber(payload.regionId),
+    addressText: cleanString(payload.addressText),
+    description: cleanString(payload.description),
+    status: cleanString(payload.status) || 'ACTIVE',
+    mapLat: cleanNumber(payload.mapLat),
+    mapLng: cleanNumber(payload.mapLng),
+    mapAddressQuery: cleanString(payload.mapAddressQuery),
+    attachmentUrl: cleanString(payload.attachmentUrl),
+  }
+}
+
 function toAbsoluteApiUrl(path: string): string {
   const base = resolveApiBaseUrl().replace(/\/$/, '')
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
@@ -603,6 +725,22 @@ export const cariService = {
           pageable: undefined,
         }
       })
+  },
+
+  listUnitFacilities(
+    id: number,
+    params: ListB2BUnitFacilitiesParams,
+  ): Promise<SpringPage<B2BUnitFacility>> {
+    return getPage<B2BUnitFacility>(`/b2b-units/${id}/facilities`, {
+      query: params.query,
+      search: params.search,
+      page: params.page,
+      size: params.size,
+      sort: params.sort,
+    }).then((page) => ({
+      ...page,
+      content: page.content.map((facility) => normalizeB2BUnitFacility(facility)),
+    }))
   },
 
   lookupWarehouses(query?: string): Promise<LookupOption[]> {
@@ -791,6 +929,15 @@ export const cariService = {
         toCheckPaymentPayload(payload),
       )
       .then((response) => normalizeTransaction(unwrapResponse(response.data)))
+  },
+
+  createUnitFacility(b2bUnitId: number, payload: B2BUnitFacilityFormPayload): Promise<B2BUnitFacility> {
+    return apiClient
+      .post<ApiResponse<B2BUnitFacility>>(
+        `/b2b-units/${b2bUnitId}/facilities`,
+        toB2BUnitFacilityPayload(payload),
+      )
+      .then((response) => normalizeB2BUnitFacility(unwrapResponse(response.data)))
   },
 
   getUnitReportHtml(id: number, startDate: string, endDate: string): Promise<string> {

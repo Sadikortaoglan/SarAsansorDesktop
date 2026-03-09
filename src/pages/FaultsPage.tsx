@@ -309,7 +309,7 @@ function FaultStatusActions({ fault }: { fault: Fault }) {
         description: 'Arıza durumu güncellendi.',
         variant: 'success',
       })
-      setNewStatus(null)
+      setConfirmStatusUpdateOpen(false)
     },
     onError: () => {
       toast({

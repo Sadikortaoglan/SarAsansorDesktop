@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,8 +32,19 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
 import type { ApiResponse } from '@/lib/api-response'
 import { getUserFriendlyErrorMessage } from '@/lib/api-error-handler'
+import { edmService } from '@/modules/edm/edm.service'
+import { GoogleMapPicker } from '@/modules/facilities/GoogleMapPicker'
+import {
+  facilitiesService,
+  type Facility,
+  type FacilityFormPayload,
+  type FacilityInvoiceType,
+  type FacilityStatus,
+  type FacilityType,
+} from '@/modules/facilities/facilities.service'
 import { PaginatedTable } from '@/modules/shared/components/PaginatedTable'
 import {
+  type B2BUnitFacility,
   type BankPaymentPayload,
   cariService,
   type B2BUnitInvoiceLinePayload,
@@ -59,6 +71,54 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   MANUAL_DEBIT: 'Manuel Borç',
   MANUAL_CREDIT: 'Manuel Alacak',
   OPENING_BALANCE: 'Açılış Bakiyesi',
+}
+
+const FACILITY_TYPE_OPTIONS = ['Apartman', 'Site', 'İş Merkezi', 'Fabrika', 'Hastane', 'Otel', 'Diğer']
+
+const FACILITY_PERSON_TYPE_OPTIONS: Array<{ value: FacilityType; label: string }> = [
+  { value: 'TUZEL_KISI', label: 'Tüzel Kişi' },
+  { value: 'GERCEK_KISI', label: 'Gerçek Kişi' },
+]
+
+const FACILITY_INVOICE_TYPE_OPTIONS: Array<{ value: FacilityInvoiceType; label: string }> = [
+  { value: 'TICARI_FATURA', label: 'Ticari Fatura' },
+  { value: 'E_ARSIV', label: 'E-Arşiv' },
+  { value: 'E_FATURA', label: 'E-Fatura' },
+]
+
+const FACILITY_STATUS_OPTIONS: Array<{ value: FacilityStatus; label: string }> = [
+  { value: 'ACTIVE', label: 'Aktif' },
+  { value: 'PASSIVE', label: 'Pasif' },
+]
+
+const initialB2BUnitFacilityForm: FacilityFormPayload = {
+  name: '',
+  b2bUnitId: undefined,
+  taxNumber: '',
+  taxOffice: '',
+  type: 'TUZEL_KISI',
+  invoiceType: 'TICARI_FATURA',
+  companyTitle: '',
+  authorizedFirstName: '',
+  authorizedLastName: '',
+  email: '',
+  phone: '',
+  facilityType: '',
+  attendantFullName: '',
+  managerFlatNo: '',
+  doorPassword: '',
+  floorCount: undefined,
+  cityId: undefined,
+  districtId: undefined,
+  neighborhoodId: undefined,
+  regionId: undefined,
+  addressText: '',
+  description: '',
+  status: 'ACTIVE',
+  mapLat: undefined,
+  mapLng: undefined,
+  mapAddressQuery: '',
+  attachmentUrl: '',
 }
 
 interface InvoiceLineState {
@@ -123,6 +183,19 @@ interface ReportingFormErrors {
   startDate?: string
   endDate?: string
   range?: string
+}
+
+type FacilityFieldKey = keyof FacilityFormPayload
+type FacilityFieldErrors = Partial<Record<FacilityFieldKey, string>>
+
+interface B2BUnitFacilityListPanelProps extends B2BUnitDetailPanelProps {
+  onOpenCreate: () => void
+  onOpenEdit: (facilityId: number) => void
+}
+
+interface B2BUnitFacilityCreatePanelProps extends B2BUnitDetailPanelProps {
+  facilityId?: number | null
+  onSaved?: () => void
 }
 
 interface B2BUnitDetailPanelProps {
@@ -414,6 +487,123 @@ function parsePaymentFieldErrors(error: unknown, mode: PaymentMode): PaymentForm
   })
 
   return mapped
+}
+
+function toB2BUnitFacilityForm(facility: Facility): FacilityFormPayload {
+  return {
+    name: facility.name || '',
+    b2bUnitId: facility.b2bUnitId || undefined,
+    taxNumber: facility.taxNumber || '',
+    taxOffice: facility.taxOffice || '',
+    type: facility.type || 'TUZEL_KISI',
+    invoiceType: facility.invoiceType || 'TICARI_FATURA',
+    companyTitle: facility.companyTitle || '',
+    authorizedFirstName: facility.authorizedFirstName || '',
+    authorizedLastName: facility.authorizedLastName || '',
+    email: facility.email || '',
+    phone: facility.phone || '',
+    facilityType: facility.facilityType || '',
+    attendantFullName: facility.attendantFullName || '',
+    managerFlatNo: facility.managerFlatNo || '',
+    doorPassword: facility.doorPassword || '',
+    floorCount: facility.floorCount ?? undefined,
+    cityId: facility.cityId ?? undefined,
+    districtId: facility.districtId ?? undefined,
+    neighborhoodId: facility.neighborhoodId ?? undefined,
+    regionId: facility.regionId ?? undefined,
+    addressText: facility.addressText || '',
+    description: facility.description || '',
+    status: facility.status || 'ACTIVE',
+    mapLat: facility.mapLat ?? undefined,
+    mapLng: facility.mapLng ?? undefined,
+    mapAddressQuery: facility.mapAddressQuery || '',
+    attachmentUrl: facility.attachmentUrl || '',
+  }
+}
+
+function validateB2BUnitFacilityForm(form: FacilityFormPayload): FacilityFieldErrors {
+  const errors: FacilityFieldErrors = {}
+  const taxRegex = /^(\d{10}|\d{11})$/
+  const phoneRegex = /^[0-9+()\-\s]{7,20}$/
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+  if (!form.name?.trim()) {
+    errors.name = 'Tesis (Bina) adı zorunlu.'
+  }
+
+  if (form.taxNumber && !taxRegex.test(form.taxNumber.trim())) {
+    errors.taxNumber = 'VKN/TCKN 10 veya 11 haneli olmalıdır.'
+  }
+
+  if (form.phone && !phoneRegex.test(form.phone.trim())) {
+    errors.phone = 'Telefon formatı geçersiz.'
+  }
+
+  if (form.email && !emailRegex.test(form.email.trim())) {
+    errors.email = 'Mail adresi geçerli formatta olmalı.'
+  }
+
+  if (form.floorCount != null && form.floorCount < 0) {
+    errors.floorCount = 'Kat sayısı negatif olamaz.'
+  }
+
+  if (form.mapLat != null && (form.mapLat < -90 || form.mapLat > 90)) {
+    errors.mapLat = 'Enlem -90 ile 90 arasında olmalıdır.'
+  }
+
+  if (form.mapLng != null && (form.mapLng < -180 || form.mapLng > 180)) {
+    errors.mapLng = 'Boylam -180 ile 180 arasında olmalıdır.'
+  }
+
+  if (form.districtId && !form.cityId) {
+    errors.cityId = 'İlçe seçimi için önce İl seçmelisiniz.'
+  }
+
+  if (form.neighborhoodId && !form.districtId) {
+    errors.districtId = 'Mahalle seçimi için önce İlçe seçmelisiniz.'
+  }
+
+  if (form.regionId && !form.neighborhoodId) {
+    errors.neighborhoodId = 'Bölge seçimi için önce Mahalle seçmelisiniz.'
+  }
+
+  return errors
+}
+
+function parseB2BUnitFacilityFieldErrors(error: unknown): FacilityFieldErrors {
+  const errors: FacilityFieldErrors = {}
+  if (!(error instanceof AxiosError)) return errors
+
+  const responseData = error.response?.data as ApiResponse<unknown> | undefined
+  const messages = [
+    ...(Array.isArray(responseData?.errors) ? responseData.errors : []),
+    responseData?.message || '',
+  ].filter(Boolean)
+
+  messages.forEach((raw) => {
+    const message = `${raw || ''}`.toLowerCase()
+    if (message.includes('name')) errors.name = 'Tesis (Bina) adı zorunlu.'
+    if (message.includes('tax number')) errors.taxNumber = 'VKN/TCKN 10 veya 11 haneli olmalıdır.'
+    if (message.includes('phone')) errors.phone = 'Telefon formatı geçersiz.'
+    if (message.includes('email')) errors.email = 'Mail adresi geçerli formatta olmalı.'
+    if (message.includes('floor count')) errors.floorCount = 'Kat sayısı negatif olamaz.'
+    if (message.includes('latitude')) errors.mapLat = 'Enlem değeri geçersiz.'
+    if (message.includes('longitude')) errors.mapLng = 'Boylam değeri geçersiz.'
+    if (message.includes('district does not belong to selected city')) {
+      errors.cityId = 'Seçilen ilçe bu ile ait değil.'
+      errors.districtId = 'Seçilen ilçe bu ile ait değil.'
+    }
+    if (message.includes('neighborhood does not belong to selected district')) {
+      errors.districtId = 'Seçilen mahalle bu ilçeye ait değil.'
+      errors.neighborhoodId = 'Seçilen mahalle bu ilçeye ait değil.'
+    }
+    if (message.includes('region does not belong to selected neighborhood')) {
+      errors.neighborhoodId = 'Seçilen bölge bu mahalleye ait değil.'
+      errors.regionId = 'Seçilen bölge bu mahalleye ait değil.'
+    }
+  })
+
+  return errors
 }
 
 function renderUnauthorizedMessage() {
@@ -2246,6 +2436,828 @@ export function B2BUnitCheckPaymentPanel({ b2bUnitId }: B2BUnitDetailPanelProps)
 
 export function B2BUnitPromissoryNotePaymentPanel({ b2bUnitId }: B2BUnitDetailPanelProps) {
   return <PaymentTransactionForm b2bUnitId={b2bUnitId} mode="promissoryNote" />
+}
+
+export function B2BUnitFacilityListPanel({
+  b2bUnitId,
+  onOpenCreate,
+  onOpenEdit,
+}: B2BUnitFacilityListPanelProps) {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const { hasAnyRole } = useAuth()
+  const canManageFacilities = hasAnyRole(['STAFF_USER'])
+
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState<number>(25)
+  const [sortField, setSortField] = useState('name')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [searchInput, setSearchInput] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [deleteCandidate, setDeleteCandidate] = useState<B2BUnitFacility | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+
+  const facilitiesQuery = useQuery({
+    queryKey: [
+      'b2bunits',
+      'facilities',
+      b2bUnitId,
+      page,
+      pageSize,
+      appliedSearch,
+      sortField,
+      sortDirection,
+    ],
+    queryFn: () =>
+      cariService.listUnitFacilities(b2bUnitId, {
+        query: appliedSearch || undefined,
+        search: appliedSearch || undefined,
+        page,
+        size: pageSize,
+        sort: `${sortField},${sortDirection}`,
+      }),
+    enabled: Number.isFinite(b2bUnitId) && b2bUnitId > 0,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (facilityId: number) => facilitiesService.deleteFacility(facilityId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['b2bunits', 'facilities', b2bUnitId] })
+      toast({
+        title: 'Başarılı',
+        description: 'Tesis kaydı silindi.',
+        variant: 'success',
+      })
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: 'Hata',
+        description: getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const handleApplySearch = () => {
+    setPage(0)
+    setAppliedSearch(searchInput.trim())
+  }
+
+  const handleSortChange = (next: { field: string; direction: SortDirection }) => {
+    setSortField(next.field)
+    setSortDirection(next.direction)
+    setPage(0)
+  }
+
+  const handleDeleteRequest = (facility: B2BUnitFacility) => {
+    setDeleteCandidate(facility)
+    setConfirmDeleteOpen(true)
+  }
+
+  const handleDeleteConfirm = () => {
+    if (!deleteCandidate?.id) return
+    deleteMutation.mutate(deleteCandidate.id)
+    setDeleteCandidate(null)
+  }
+
+  const columns = useMemo(
+    () => [
+      {
+        key: 'name',
+        header: 'TESİS (BİNA) ADI',
+        sortable: true,
+        sortKey: 'name',
+        render: (row: B2BUnitFacility) => row.name || '-',
+      },
+      {
+        key: 'actions',
+        header: 'İŞLEM',
+        exportable: false,
+        render: (row: B2BUnitFacility) => {
+          if (!canManageFacilities || !row.id) return '-'
+          return (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => onOpenEdit(Number(row.id))}>
+                Düzenle
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => handleDeleteRequest(row)}
+                disabled={deleteMutation.isPending}
+              >
+                Sil
+              </Button>
+            </div>
+          )
+        },
+      },
+    ],
+    [canManageFacilities, deleteMutation.isPending],
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">TESİSLER (BİNALAR)</h2>
+        {canManageFacilities ? (
+          <Button onClick={onOpenCreate} variant="outline">
+            Tesis (Bina) Ekle
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-[140px_minmax(0,1fr)_auto]">
+        <div className="space-y-2">
+          <Label>Sayfa Boyutu</Label>
+          <Select
+            value={String(pageSize)}
+            onValueChange={(value) => {
+              setPageSize(Number(value))
+              setPage(0)
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((sizeOption) => (
+                <SelectItem key={sizeOption} value={String(sizeOption)}>
+                  {sizeOption}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-search">Ara</Label>
+          <Input
+            id="b2bunit-facility-search"
+            placeholder="Arayın..."
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                handleApplySearch()
+              }
+            }}
+          />
+        </div>
+
+        <div className="flex items-end">
+          <Button variant="outline" onClick={handleApplySearch} disabled={facilitiesQuery.isFetching}>
+            Ara
+          </Button>
+        </div>
+      </div>
+
+      <PaginatedTable
+        pageData={facilitiesQuery.data}
+        loading={facilitiesQuery.isLoading || facilitiesQuery.isFetching}
+        onPageChange={setPage}
+        sort={{ field: sortField, direction: sortDirection }}
+        onSortChange={handleSortChange}
+        tableTitle="tesisler-binalar"
+        emptyMessage="Kayıt bulunamadı."
+        columns={columns}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={(open) => {
+          setConfirmDeleteOpen(open)
+          if (!open) setDeleteCandidate(null)
+        }}
+        title="Tesis Sil"
+        message={`"${deleteCandidate?.name || 'Bu kayıt'}" tesisini silmek istediğinize emin misiniz?`}
+        confirmText="Evet, Sil"
+        cancelText="İptal"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+      />
+    </div>
+  )
+}
+
+export function B2BUnitFacilityCreatePanel({
+  b2bUnitId,
+  facilityId,
+  onSaved,
+}: B2BUnitFacilityCreatePanelProps) {
+  const { toast } = useToast()
+  const { hasAnyRole } = useAuth()
+  const queryClient = useQueryClient()
+  const canManageFacilities = hasAnyRole(['STAFF_USER'])
+  const isEdit = Boolean(facilityId)
+
+  const [form, setForm] = useState<FacilityFormPayload>(initialB2BUnitFacilityForm)
+  const [fieldErrors, setFieldErrors] = useState<FacilityFieldErrors>({})
+
+  const detailQuery = useQuery({
+    queryKey: ['facility', 'b2bunit-detail-panel', facilityId],
+    queryFn: () => facilitiesService.getFacilityById(Number(facilityId)),
+    enabled: isEdit && !!facilityId && canManageFacilities,
+  })
+
+  const addressQuery = useQuery({
+    queryKey: ['facility', 'b2bunit-detail-panel', facilityId, 'address'],
+    queryFn: () => facilitiesService.getFacilityAddress(Number(facilityId)),
+    enabled: isEdit && !!facilityId && canManageFacilities,
+  })
+
+  const citiesQuery = useQuery({
+    queryKey: ['locations', 'cities', 'b2bunit-detail-facility'],
+    queryFn: () => facilitiesService.listCities(),
+    enabled: canManageFacilities,
+  })
+
+  const districtsQuery = useQuery({
+    queryKey: ['locations', 'districts', 'b2bunit-detail-facility', form.cityId],
+    queryFn: () => facilitiesService.listDistricts(Number(form.cityId)),
+    enabled: canManageFacilities && !!form.cityId,
+  })
+
+  const neighborhoodsQuery = useQuery({
+    queryKey: ['locations', 'neighborhoods', 'b2bunit-detail-facility', form.districtId],
+    queryFn: () => facilitiesService.listNeighborhoods(Number(form.districtId)),
+    enabled: canManageFacilities && !!form.districtId,
+  })
+
+  const regionsQuery = useQuery({
+    queryKey: ['locations', 'regions', 'b2bunit-detail-facility', form.neighborhoodId],
+    queryFn: () => facilitiesService.listRegions(Number(form.neighborhoodId)),
+    enabled: canManageFacilities && !!form.neighborhoodId,
+  })
+
+  useEffect(() => {
+    if (!isEdit) {
+      setForm({ ...initialB2BUnitFacilityForm })
+      setFieldErrors({})
+    }
+  }, [isEdit, facilityId])
+
+  useEffect(() => {
+    if (!detailQuery.data) return
+    setForm({
+      ...toB2BUnitFacilityForm(detailQuery.data),
+      b2bUnitId,
+    })
+    setFieldErrors({})
+  }, [detailQuery.data, b2bUnitId])
+
+  useEffect(() => {
+    if (!addressQuery.data) return
+    setForm((prev) => ({
+      ...prev,
+      cityId: prev.cityId ?? addressQuery.data?.cityId ?? undefined,
+      districtId: prev.districtId ?? addressQuery.data?.districtId ?? undefined,
+      neighborhoodId: prev.neighborhoodId ?? addressQuery.data?.neighborhoodId ?? undefined,
+      regionId: prev.regionId ?? addressQuery.data?.regionId ?? undefined,
+      addressText: prev.addressText || addressQuery.data?.addressText || '',
+    }))
+  }, [addressQuery.data])
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const payload: FacilityFormPayload = { ...form, b2bUnitId }
+      if (isEdit && facilityId) {
+        return facilitiesService.updateFacility(Number(facilityId), payload)
+      }
+      return cariService.createUnitFacility(b2bUnitId, payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['b2bunits', 'facilities', b2bUnitId] })
+      toast({
+        title: 'Başarılı',
+        description: isEdit ? 'Tesis güncellendi.' : 'Tesis oluşturuldu.',
+        variant: 'success',
+      })
+      if (!isEdit) {
+        setForm({ ...initialB2BUnitFacilityForm })
+      }
+      setFieldErrors({})
+      onSaved?.()
+    },
+    onError: (error: unknown) => {
+      const mapped = parseB2BUnitFacilityFieldErrors(error)
+      if (Object.keys(mapped).length > 0) {
+        setFieldErrors(mapped)
+      }
+      toast({
+        title: 'Hata',
+        description: getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const vknValidationMutation = useMutation({
+    mutationFn: (value: string) => edmService.validateVkn(value),
+    onSuccess: (result) => {
+      toast({
+        title: 'E-Fatura Sorgu Sonucu',
+        description: result.message || (result.valid ? `Geçerli (${result.type})` : `Geçersiz (${result.type})`),
+        variant: result.valid ? 'success' : 'destructive',
+      })
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: 'Sorgu Hatası',
+        description: getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const setField = <K extends FacilityFieldKey>(key: K, value: FacilityFormPayload[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+    setFieldErrors((prev) => ({ ...prev, [key]: undefined }))
+  }
+
+  const sortedCities = useMemo(
+    () => (citiesQuery.data || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'tr')),
+    [citiesQuery.data],
+  )
+  const sortedDistricts = useMemo(
+    () => (districtsQuery.data || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'tr')),
+    [districtsQuery.data],
+  )
+  const sortedNeighborhoods = useMemo(
+    () => (neighborhoodsQuery.data || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'tr')),
+    [neighborhoodsQuery.data],
+  )
+  const sortedRegions = useMemo(
+    () => (regionsQuery.data || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'tr')),
+    [regionsQuery.data],
+  )
+
+  const locationSummary = useMemo(() => {
+    const cityName = sortedCities.find((x) => x.id === form.cityId)?.name || detailQuery.data?.cityName || addressQuery.data?.cityName
+    const districtName =
+      sortedDistricts.find((x) => x.id === form.districtId)?.name || detailQuery.data?.districtName || addressQuery.data?.districtName
+    const neighborhoodName =
+      sortedNeighborhoods.find((x) => x.id === form.neighborhoodId)?.name || detailQuery.data?.neighborhoodName || addressQuery.data?.neighborhoodName
+    const regionName =
+      sortedRegions.find((x) => x.id === form.regionId)?.name || detailQuery.data?.regionName || addressQuery.data?.regionName
+
+    const parts = [cityName, districtName, neighborhoodName, regionName].filter(Boolean)
+    return parts.length > 0 ? parts.join(' / ') : '-'
+  }, [form.cityId, form.districtId, form.neighborhoodId, form.regionId, sortedCities, sortedDistricts, sortedNeighborhoods, sortedRegions, detailQuery.data, addressQuery.data])
+
+  const handleSubmit = () => {
+    const errors = validateB2BUnitFacilityForm(form)
+    setFieldErrors(errors)
+
+    if (Object.keys(errors).length > 0) {
+      toast({
+        title: 'Hata',
+        description: 'Lütfen zorunlu alanları ve form doğrulamasını kontrol edin.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    saveMutation.mutate()
+  }
+
+  const handleValidateTaxNumber = () => {
+    const value = (form.taxNumber || '').trim()
+    if (!value) {
+      toast({
+        title: 'Eksik Bilgi',
+        description: 'Önce VKN/TCKN değeri girin.',
+        variant: 'destructive',
+      })
+      return
+    }
+    vknValidationMutation.mutate(value)
+  }
+
+  if (!canManageFacilities) {
+    return renderUnauthorizedMessage()
+  }
+
+  return (
+    <div className="space-y-5">
+      <h2 className="text-lg font-semibold">{isEdit ? 'TESİS (BİNA) DÜZENLE' : 'TESİS (BİNA) EKLE'}</h2>
+
+      {detailQuery.isLoading ? <p className="text-sm text-muted-foreground">Kayıt yükleniyor...</p> : null}
+
+      <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
+        <span className="font-medium">Adres Özeti: </span>
+        <span>{locationSummary}</span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-name">Tesis (Bina) Adı *</Label>
+          <Input
+            id="b2bunit-facility-name"
+            value={form.name || ''}
+            onChange={(event) => setField('name', event.target.value)}
+            className={fieldErrors.name ? 'border-destructive' : ''}
+          />
+          {fieldErrors.name ? <p className="text-sm text-destructive">{fieldErrors.name}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-tax-number">VKN/TCKN</Label>
+          <div className="flex gap-2">
+            <Input
+              id="b2bunit-facility-tax-number"
+              value={form.taxNumber || ''}
+              onChange={(event) => setField('taxNumber', event.target.value)}
+              className={fieldErrors.taxNumber ? 'border-destructive' : ''}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleValidateTaxNumber}
+              disabled={vknValidationMutation.isPending}
+            >
+              E-Fatura Sorgula
+            </Button>
+          </div>
+          {fieldErrors.taxNumber ? <p className="text-sm text-destructive">{fieldErrors.taxNumber}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tip</Label>
+          <Select
+            value={form.type || 'TUZEL_KISI'}
+            onValueChange={(value: FacilityType) => setField('type', value)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FACILITY_PERSON_TYPE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Fatura Tipi</Label>
+          <Select
+            value={form.invoiceType || 'TICARI_FATURA'}
+            onValueChange={(value: FacilityInvoiceType) => setField('invoiceType', value)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FACILITY_INVOICE_TYPE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-tax-office">Vergi Dairesi</Label>
+          <Input
+            id="b2bunit-facility-tax-office"
+            value={form.taxOffice || ''}
+            onChange={(event) => setField('taxOffice', event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-company-title">Firma Ünvanı</Label>
+          <Input
+            id="b2bunit-facility-company-title"
+            value={form.companyTitle || ''}
+            onChange={(event) => setField('companyTitle', event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-authorized-first-name">Yetkili Ad</Label>
+          <Input
+            id="b2bunit-facility-authorized-first-name"
+            value={form.authorizedFirstName || ''}
+            onChange={(event) => setField('authorizedFirstName', event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-authorized-last-name">Yetkili Soyad</Label>
+          <Input
+            id="b2bunit-facility-authorized-last-name"
+            value={form.authorizedLastName || ''}
+            onChange={(event) => setField('authorizedLastName', event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-email">Mail Adresi</Label>
+          <Input
+            id="b2bunit-facility-email"
+            value={form.email || ''}
+            onChange={(event) => setField('email', event.target.value)}
+            className={fieldErrors.email ? 'border-destructive' : ''}
+          />
+          {fieldErrors.email ? <p className="text-sm text-destructive">{fieldErrors.email}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-phone">Tel</Label>
+          <Input
+            id="b2bunit-facility-phone"
+            value={form.phone || ''}
+            onChange={(event) => setField('phone', event.target.value)}
+            className={fieldErrors.phone ? 'border-destructive' : ''}
+          />
+          {fieldErrors.phone ? <p className="text-sm text-destructive">{fieldErrors.phone}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tesis Türü</Label>
+          <Input
+            list="b2bunit-facility-type-options"
+            value={form.facilityType || ''}
+            onChange={(event) => setField('facilityType', event.target.value)}
+          />
+          <datalist id="b2bunit-facility-type-options">
+            {FACILITY_TYPE_OPTIONS.map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-attendant-full-name">Görevli Ad Soyad</Label>
+          <Input
+            id="b2bunit-facility-attendant-full-name"
+            value={form.attendantFullName || ''}
+            onChange={(event) => setField('attendantFullName', event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-manager-flat-no">Yönetici Daire No</Label>
+          <Input
+            id="b2bunit-facility-manager-flat-no"
+            value={form.managerFlatNo || ''}
+            onChange={(event) => setField('managerFlatNo', event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-door-password">Kapı Şifresi</Label>
+          <Input
+            id="b2bunit-facility-door-password"
+            value={form.doorPassword || ''}
+            onChange={(event) => setField('doorPassword', event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-floor-count">Kat Sayısı</Label>
+          <Input
+            id="b2bunit-facility-floor-count"
+            type="number"
+            min={0}
+            value={form.floorCount ?? ''}
+            onChange={(event) => {
+              const value = event.target.value
+              setField('floorCount', value === '' ? undefined : Number(value))
+            }}
+            className={fieldErrors.floorCount ? 'border-destructive' : ''}
+          />
+          {fieldErrors.floorCount ? <p className="text-sm text-destructive">{fieldErrors.floorCount}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label>İl</Label>
+          <Select
+            value={form.cityId ? String(form.cityId) : undefined}
+            onValueChange={(value) => {
+              const nextCityId = Number(value)
+              setForm((prev) => ({
+                ...prev,
+                cityId: nextCityId,
+                districtId: undefined,
+                neighborhoodId: undefined,
+                regionId: undefined,
+              }))
+              setFieldErrors((prev) => ({
+                ...prev,
+                cityId: undefined,
+                districtId: undefined,
+                neighborhoodId: undefined,
+                regionId: undefined,
+              }))
+            }}
+          >
+            <SelectTrigger className={fieldErrors.cityId ? 'border-destructive' : ''}>
+              <SelectValue placeholder="İl seçin" />
+            </SelectTrigger>
+            <SelectContent>
+              {sortedCities.map((option) => (
+                <SelectItem key={option.id} value={String(option.id)}>
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {fieldErrors.cityId ? <p className="text-sm text-destructive">{fieldErrors.cityId}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label>İlçe</Label>
+          <Select
+            value={form.districtId ? String(form.districtId) : undefined}
+            onValueChange={(value) => {
+              const nextDistrictId = Number(value)
+              setForm((prev) => ({
+                ...prev,
+                districtId: nextDistrictId,
+                neighborhoodId: undefined,
+                regionId: undefined,
+              }))
+              setFieldErrors((prev) => ({
+                ...prev,
+                districtId: undefined,
+                neighborhoodId: undefined,
+                regionId: undefined,
+              }))
+            }}
+            disabled={!form.cityId}
+          >
+            <SelectTrigger className={fieldErrors.districtId ? 'border-destructive' : ''}>
+              <SelectValue placeholder={form.cityId ? 'İlçe seçin' : 'Önce il seçin'} />
+            </SelectTrigger>
+            <SelectContent>
+              {sortedDistricts.map((option) => (
+                <SelectItem key={option.id} value={String(option.id)}>
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {fieldErrors.districtId ? <p className="text-sm text-destructive">{fieldErrors.districtId}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Mahalle</Label>
+          <Select
+            value={form.neighborhoodId ? String(form.neighborhoodId) : undefined}
+            onValueChange={(value) => {
+              const nextNeighborhoodId = Number(value)
+              setForm((prev) => ({
+                ...prev,
+                neighborhoodId: nextNeighborhoodId,
+                regionId: undefined,
+              }))
+              setFieldErrors((prev) => ({
+                ...prev,
+                neighborhoodId: undefined,
+                regionId: undefined,
+              }))
+            }}
+            disabled={!form.districtId}
+          >
+            <SelectTrigger className={fieldErrors.neighborhoodId ? 'border-destructive' : ''}>
+              <SelectValue placeholder={form.districtId ? 'Mahalle seçin' : 'Önce ilçe seçin'} />
+            </SelectTrigger>
+            <SelectContent>
+              {sortedNeighborhoods.map((option) => (
+                <SelectItem key={option.id} value={String(option.id)}>
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {fieldErrors.neighborhoodId ? <p className="text-sm text-destructive">{fieldErrors.neighborhoodId}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Bölge</Label>
+          <Select
+            value={form.regionId ? String(form.regionId) : undefined}
+            onValueChange={(value) => setField('regionId', Number(value))}
+            disabled={!form.neighborhoodId}
+          >
+            <SelectTrigger className={fieldErrors.regionId ? 'border-destructive' : ''}>
+              <SelectValue placeholder={form.neighborhoodId ? 'Bölge seçin' : 'Önce mahalle seçin'} />
+            </SelectTrigger>
+            <SelectContent>
+              {sortedRegions.map((option) => (
+                <SelectItem key={option.id} value={String(option.id)}>
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {fieldErrors.regionId ? <p className="text-sm text-destructive">{fieldErrors.regionId}</p> : null}
+        </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="b2bunit-facility-address-text">Adres</Label>
+          <Textarea
+            id="b2bunit-facility-address-text"
+            rows={3}
+            value={form.addressText || ''}
+            onChange={(event) => setField('addressText', event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="b2bunit-facility-description">Açıklama</Label>
+          <Textarea
+            id="b2bunit-facility-description"
+            rows={3}
+            value={form.description || ''}
+            onChange={(event) => setField('description', event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <Label>Dosya veya Resim Yükle</Label>
+          <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+            Dosya/Resim yükleme entegrasyonu bu modülde henüz aktif değil. Bu alan yakında açılacaktır.
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Durum</Label>
+          <Select
+            value={form.status || 'ACTIVE'}
+            onValueChange={(value: FacilityStatus) => setField('status', value)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FACILITY_STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-map-lat">Enlem (Lat)</Label>
+          <Input
+            id="b2bunit-facility-map-lat"
+            type="number"
+            step="0.000001"
+            value={form.mapLat ?? ''}
+            onChange={(event) => {
+              const value = event.target.value
+              setField('mapLat', value === '' ? undefined : Number(value))
+            }}
+            className={fieldErrors.mapLat ? 'border-destructive' : ''}
+          />
+          {fieldErrors.mapLat ? <p className="text-sm text-destructive">{fieldErrors.mapLat}</p> : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="b2bunit-facility-map-lng">Boylam (Lng)</Label>
+          <Input
+            id="b2bunit-facility-map-lng"
+            type="number"
+            step="0.000001"
+            value={form.mapLng ?? ''}
+            onChange={(event) => {
+              const value = event.target.value
+              setField('mapLng', value === '' ? undefined : Number(value))
+            }}
+            className={fieldErrors.mapLng ? 'border-destructive' : ''}
+          />
+          {fieldErrors.mapLng ? <p className="text-sm text-destructive">{fieldErrors.mapLng}</p> : null}
+        </div>
+      </div>
+
+      <GoogleMapPicker
+        lat={form.mapLat}
+        lng={form.mapLng}
+        addressQuery={form.mapAddressQuery}
+        onAddressQueryChange={(value) => setField('mapAddressQuery', value)}
+        onLocationChange={(lat, lng) => {
+          setField('mapLat', Number(lat.toFixed(7)))
+          setField('mapLng', Number(lng.toFixed(7)))
+        }}
+      />
+
+      <div className="flex justify-end">
+        <Button onClick={handleSubmit} disabled={saveMutation.isPending}>
+          {saveMutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 export function B2BUnitDetailInvoicePanel() {

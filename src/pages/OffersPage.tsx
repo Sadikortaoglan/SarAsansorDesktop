@@ -434,7 +434,6 @@ function OfferFormDialog({
       mobileLabel: 'Parça',
       mobilePriority: 10,
       render: (item: any) => {
-        const part = partsArray.find((p) => p.id === item.partId)
         return (
           <Select
             value={item.partId.toString()}
