@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { getUserFriendlyErrorMessage } from '@/lib/api-error-handler'
+import { extractBlobErrorMessage, extractFilenameFromDisposition, triggerBlobDownload } from '@/lib/blob-download'
 import {
   revisionStandardsAdminService,
   type RevisionStandardAdminStandard,
@@ -192,6 +193,31 @@ export function RevisionStandardsPage() {
     setQuery(queryInput.trim())
   }
 
+  const handleExport = async (format: 'csv' | 'xlsx' | 'pdf') => {
+    try {
+      const response = await revisionStandardsAdminService.exportRevisionStandards({
+        query: query || undefined,
+        format,
+      })
+      const fallbackName = `revision-standards.${format}`
+      const filename = extractFilenameFromDisposition(response.headers['content-disposition'], fallbackName)
+      triggerBlobDownload(response.data, filename)
+      toast({
+        title: 'Başarılı',
+        description: `${format.toUpperCase()} dışa aktarma tamamlandı.`,
+        variant: 'success',
+      })
+    } catch (error) {
+      const blobMessage = await extractBlobErrorMessage(error)
+      toast({
+        title: 'Hata',
+        description: blobMessage || getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+      throw error
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -229,6 +255,9 @@ export function RevisionStandardsPage() {
           onPageChange={setPage}
           tableTitle="revision-standards"
           emptyMessage="Standart bulunamadı"
+          onExportCsv={() => handleExport('csv')}
+          onExportExcel={() => handleExport('xlsx')}
+          onExportPdf={() => handleExport('pdf')}
           columns={[
             {
               key: 'standardCode',

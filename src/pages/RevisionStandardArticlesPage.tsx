@@ -14,11 +14,13 @@ import { EntityModal } from '@/modules/shared/components/EntityModal'
 import { PaginatedTable } from '@/modules/shared/components/PaginatedTable'
 import { useToast } from '@/components/ui/use-toast'
 import { getUserFriendlyErrorMessage } from '@/lib/api-error-handler'
+import { extractBlobErrorMessage, extractFilenameFromDisposition, triggerBlobDownload } from '@/lib/blob-download'
 import {
   revisionStandardsAdminService,
   type RevisionStandardArticle,
   type RevisionStandardArticlePayload,
 } from '@/services/revision-standards-admin.service'
+import type { SpringPage } from '@/modules/shared/types'
 
 const PAGE_SIZE = 25
 const TAG_COLOR_OPTIONS = ['MAVI', 'SARI', 'KIRMIZI', 'YESIL', 'TURUNCU'] as const
@@ -85,6 +87,7 @@ export function RevisionStandardArticlesPage() {
   const [tagFilter, setTagFilter] = useState('all')
   const [minPriceFilter, setMinPriceFilter] = useState('')
   const [maxPriceFilter, setMaxPriceFilter] = useState('')
+  const [filterError, setFilterError] = useState('')
 
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<RevisionStandardArticle | null>(null)
@@ -100,7 +103,7 @@ export function RevisionStandardArticlesPage() {
     enabled: Number.isFinite(parsedStandardId) && parsedStandardId > 0,
   })
 
-  const articlesQuery = useQuery({
+  const articlesQuery = useQuery<SpringPage<RevisionStandardArticle>, Error>({
     queryKey: ['revision-standards', 'admin', 'articles', parsedStandardId, query, tagFilter, minPriceFilter, maxPriceFilter, page, PAGE_SIZE],
     queryFn: () =>
       revisionStandardsAdminService.getRevisionStandardArticles(parsedStandardId, {
@@ -112,6 +115,8 @@ export function RevisionStandardArticlesPage() {
         size: PAGE_SIZE,
       }),
     enabled: Number.isFinite(parsedStandardId) && parsedStandardId > 0,
+    placeholderData: (previousData) => previousData,
+    retry: false,
   })
 
   const saveMutation = useMutation({
@@ -179,8 +184,21 @@ export function RevisionStandardArticlesPage() {
     setPage(0)
   }, [tagFilter, minPriceFilter, maxPriceFilter])
 
+  useEffect(() => {
+    if (!articlesQuery.isError) return
+
+    const message = getUserFriendlyErrorMessage(articlesQuery.error)
+    setFilterError(message)
+  }, [articlesQuery.error, articlesQuery.isError])
+
+  useEffect(() => {
+    if (!articlesQuery.isSuccess) return
+    setFilterError('')
+  }, [articlesQuery.isSuccess, articlesQuery.dataUpdatedAt])
+
   const handleSearch = () => {
     setPage(0)
+    setFilterError('')
     setQuery(queryInput.trim())
   }
 
@@ -227,9 +245,38 @@ export function RevisionStandardArticlesPage() {
 
   const clearLocalFilters = () => {
     setPage(0)
+    setFilterError('')
     setTagFilter('all')
     setMinPriceFilter('')
     setMaxPriceFilter('')
+  }
+
+  const handleExport = async (format: 'csv' | 'xlsx' | 'pdf') => {
+    try {
+      const response = await revisionStandardsAdminService.exportRevisionStandardArticles(parsedStandardId, {
+        query: query || undefined,
+        tagColor: tagFilter === 'all' ? undefined : tagFilter,
+        minPrice: minPriceFilter === '' ? undefined : Number(minPriceFilter),
+        maxPrice: maxPriceFilter === '' ? undefined : Number(maxPriceFilter),
+        format,
+      })
+      const fallbackName = `revision-standard-articles-${parsedStandardId}.${format}`
+      const filename = extractFilenameFromDisposition(response.headers['content-disposition'], fallbackName)
+      triggerBlobDownload(response.data, filename)
+      toast({
+        title: 'Başarılı',
+        description: `${format.toUpperCase()} dışa aktarma tamamlandı.`,
+        variant: 'success',
+      })
+    } catch (error) {
+      const blobMessage = await extractBlobErrorMessage(error)
+      toast({
+        title: 'Hata',
+        description: blobMessage || getUserFriendlyErrorMessage(error),
+        variant: 'destructive',
+      })
+      throw error
+    }
   }
 
   return (
@@ -326,6 +373,11 @@ export function RevisionStandardArticlesPage() {
           <p className="mt-3 text-xs text-muted-foreground">
             Etiket ve fiyat filtreleri backend uzerinden tum veri setine uygulanir.
           </p>
+          {filterError ? (
+            <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {filterError}
+            </div>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent>
@@ -333,8 +385,11 @@ export function RevisionStandardArticlesPage() {
           pageData={pageData}
           loading={articlesQuery.isLoading}
           onPageChange={setPage}
-          tableTitle="revision-standard-articles"
+          tableTitle={`revision-standard-articles-${parsedStandardId}`}
           emptyMessage="Madde bulunamadı"
+          onExportCsv={() => handleExport('csv')}
+          onExportExcel={() => handleExport('xlsx')}
+          onExportPdf={() => handleExport('pdf')}
           columns={[
             {
               key: 'articleNo',

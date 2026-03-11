@@ -2,6 +2,7 @@ import apiClient from '@/lib/api'
 import { unwrapResponse, type ApiResponse } from '@/lib/api-response'
 import { getPage } from '@/modules/shared/api'
 import type { SpringPage } from '@/modules/shared/types'
+import type { AxiosResponse } from 'axios'
 
 export type RevisionStandardAdminStandard = {
   id: number
@@ -145,5 +146,22 @@ export const revisionStandardsAdminService = {
   async importRevisionStandards(): Promise<RevisionStandardImportResult> {
     const { data } = await apiClient.post<ApiResponse<unknown> | unknown>('/admin/revision-standards/import')
     return mapImportResult(unwrapResponse(data) as Record<string, unknown>)
+  },
+
+  exportRevisionStandards(params: { query?: string; format: 'csv' | 'xlsx' | 'pdf' }): Promise<AxiosResponse<Blob>> {
+    return apiClient.get('/admin/revision-standards/standards/export', {
+      params,
+      responseType: 'blob',
+    })
+  },
+
+  exportRevisionStandardArticles(
+    standardId: number,
+    params: { query?: string; tagColor?: string; minPrice?: number; maxPrice?: number; format: 'csv' | 'xlsx' | 'pdf' }
+  ): Promise<AxiosResponse<Blob>> {
+    return apiClient.get(`/admin/revision-standards/standards/${standardId}/articles/export`, {
+      params,
+      responseType: 'blob',
+    })
   },
 }

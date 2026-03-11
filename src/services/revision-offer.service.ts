@@ -18,6 +18,8 @@ export interface RevisionOffer {
   elevatorBuildingName?: string
   currentAccountId?: number
   currentAccountName?: string
+  revisionStandardId?: number
+  revisionStandardCode?: string
   parts: RevisionOfferPart[]
   labor: number
   laborDescription?: string
@@ -31,6 +33,7 @@ export interface RevisionOffer {
 export interface CreateRevisionOfferRequest {
   elevatorId: number
   currentAccountId?: number
+  revisionStandardId?: number
   parts: Omit<RevisionOfferPart, 'totalPrice'>[]
   labor: number
   laborDescription?: string
@@ -41,23 +44,62 @@ export interface UpdateRevisionOfferRequest extends Partial<CreateRevisionOfferR
 }
 
 function mapRevisionOfferFromBackend(backend: any): RevisionOffer {
+  const backendParts = Array.isArray(backend.parts)
+    ? backend.parts
+    : Array.isArray(backend.items)
+      ? backend.items
+      : Array.isArray(backend.offerItems)
+        ? backend.offerItems
+        : []
+
   return {
     id: backend.id,
     offerNo: backend.offerNo || backend.offer_no,
-    elevatorId: backend.elevatorId || backend.elevator_id || 0,
-    elevatorIdentityNumber: backend.elevatorIdentityNumber || backend.elevator_identity_number,
-    elevatorBuildingName: backend.elevatorBuildingName || backend.elevator_building_name,
-    currentAccountId: backend.currentAccountId || backend.current_account_id,
-    currentAccountName: backend.currentAccountName || backend.current_account_name,
-    parts: Array.isArray(backend.parts) ? backend.parts.map((p: any) => ({
-      partId: p.partId || p.part_id || 0,
-      partName: p.partName || p.part_name || '',
-      quantity: p.quantity || 0,
-      unitPrice: p.unitPrice || p.unit_price || 0,
-      totalPrice: (p.quantity || 0) * (p.unitPrice || p.unit_price || 0),
-      description: p.description,
-    })) : [],
-    labor: backend.labor || 0,
+    elevatorId: backend.elevatorId || backend.elevator_id || backend.elevator?.id || 0,
+    elevatorIdentityNumber:
+      backend.elevatorIdentityNumber ||
+      backend.elevator_identity_number ||
+      backend.elevator?.identityNumber ||
+      backend.elevator?.kimlikNo,
+    elevatorBuildingName:
+      backend.elevatorBuildingName ||
+      backend.elevator_building_name ||
+      backend.elevator?.buildingName ||
+      backend.elevator?.bina,
+    currentAccountId:
+      backend.currentAccountId ||
+      backend.current_account_id ||
+      backend.currentAccount?.id ||
+      backend.current_account?.id,
+    currentAccountName:
+      backend.currentAccountName ||
+      backend.current_account_name ||
+      backend.currentAccount?.name ||
+      backend.current_account?.name,
+    revisionStandardId:
+      backend.revisionStandardId ||
+      backend.revision_standard_id ||
+      backend.revisionStandard?.id ||
+      backend.revision_standard?.id,
+    revisionStandardCode:
+      backend.revisionStandardCode ||
+      backend.revision_standard_code ||
+      backend.revisionStandard?.standardCode ||
+      backend.revisionStandard?.code ||
+      backend.revision_standard?.standard_code,
+    parts: backendParts.map((p: any) => {
+      const quantity = p.quantity || 0
+      const unitPrice = p.unitPrice || p.unit_price || p.part?.unitPrice || 0
+      return {
+        partId: p.partId || p.part_id || p.part?.id || 0,
+        partName: p.partName || p.part_name || p.part?.name || '',
+        quantity,
+        unitPrice,
+        totalPrice: p.totalPrice || p.total_price || p.total || quantity * unitPrice,
+        description: p.description,
+      }
+    }),
+    labor: backend.labor || backend.laborTotal || backend.labor_total || 0,
     laborDescription: backend.laborDescription || backend.labor_description,
     totalPrice: backend.totalPrice || backend.total_price || 0,
     status: (backend.status || 'DRAFT').toUpperCase() as RevisionOffer['status'],
@@ -95,6 +137,9 @@ export const revisionOfferService = {
     if (offer.currentAccountId) {
       backendRequest.currentAccountId = offer.currentAccountId
     }
+    if (offer.revisionStandardId) {
+      backendRequest.revisionStandardId = offer.revisionStandardId
+    }
 
     const { data } = await apiClient.post<ApiResponse<any>>('/revision-offers', backendRequest)
     const unwrapped = unwrapResponse(data)
@@ -105,6 +150,7 @@ export const revisionOfferService = {
     const backendRequest: any = {}
     if (offer.elevatorId !== undefined) backendRequest.elevatorId = offer.elevatorId
     if (offer.currentAccountId !== undefined) backendRequest.currentAccountId = offer.currentAccountId
+    if (offer.revisionStandardId !== undefined) backendRequest.revisionStandardId = offer.revisionStandardId
     if (offer.parts !== undefined) {
       backendRequest.parts = offer.parts.map((p) => ({
         partId: p.partId,

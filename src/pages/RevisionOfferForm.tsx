@@ -14,6 +14,7 @@ import { formatCurrency } from '@/lib/utils'
 import { RevisionStandardAutocomplete } from '@/components/revision/RevisionStandardAutocomplete'
 import type { RevisionStandardSearchResult } from '@/services/revision-standard.service'
 import { cariService } from '@/modules/cari/cari.service'
+import { revisionStandardsAdminService } from '@/services/revision-standards-admin.service'
 
 interface RevisionOfferFormProps {
   offer: RevisionOffer | null
@@ -34,6 +35,7 @@ export function RevisionOfferForm({ offer, onCancel, onSuccess }: RevisionOfferF
   const [formData, setFormData] = useState({
     elevatorId: '',
     currentAccountId: '',
+    revisionStandardId: '',
     parts: [] as RevisionOfferFormPart[],
     labor: 0,
     laborDescription: '',
@@ -61,15 +63,26 @@ export function RevisionOfferForm({ offer, onCancel, onSuccess }: RevisionOfferF
       }),
   })
 
+  const { data: revisionStandardsPage } = useQuery({
+    queryKey: ['revision-standards', 'lookup', 'revision-offer-form'],
+    queryFn: () =>
+      revisionStandardsAdminService.getRevisionStandards({
+        page: 0,
+        size: 200,
+      }),
+  })
+
   const elevatorsArray = Array.isArray(elevators) ? elevators : []
   const partsArray = Array.isArray(parts) ? parts : []
   const currentAccounts = currentAccountsPage?.content || []
+  const revisionStandards = revisionStandardsPage?.content || []
 
   useEffect(() => {
     if (offer) {
       setFormData({
         elevatorId: String(offer.elevatorId),
         currentAccountId: offer.currentAccountId ? String(offer.currentAccountId) : '',
+        revisionStandardId: offer.revisionStandardId ? String(offer.revisionStandardId) : '',
         parts: offer.parts.map((p) => ({
           partId: String(p.partId),
           quantity: p.quantity,
@@ -85,6 +98,7 @@ export function RevisionOfferForm({ offer, onCancel, onSuccess }: RevisionOfferF
       setFormData({
         elevatorId: '',
         currentAccountId: '',
+        revisionStandardId: '',
         parts: [],
         labor: 0,
         laborDescription: '',
@@ -93,6 +107,20 @@ export function RevisionOfferForm({ offer, onCancel, onSuccess }: RevisionOfferF
   }, [offer])
 
   const selectedElevator = elevatorsArray.find((e) => e.id === Number(formData.elevatorId))
+  const selectedRevisionStandardHeader = revisionStandards.find(
+    (standard) => standard.id === Number(formData.revisionStandardId)
+  )
+  const currentAccountOptions = formData.currentAccountId && offer?.currentAccountName &&
+    !currentAccounts.some((account) => account.id === Number(formData.currentAccountId))
+    ? [{ id: Number(formData.currentAccountId), name: offer.currentAccountName }, ...currentAccounts]
+    : currentAccounts
+  const revisionStandardOptions = formData.revisionStandardId && offer?.revisionStandardCode &&
+    !revisionStandards.some((standard) => standard.id === Number(formData.revisionStandardId))
+    ? [{ id: Number(formData.revisionStandardId), standardCode: offer.revisionStandardCode }, ...revisionStandards]
+    : revisionStandards
+  const selectedRevisionStandardHeaderCode =
+    selectedRevisionStandardHeader?.standardCode ||
+    (offer?.revisionStandardId === Number(formData.revisionStandardId) ? offer.revisionStandardCode : undefined)
 
   useEffect(() => {
     if (!selectedElevator?.currentAccountId) return
@@ -120,6 +148,7 @@ export function RevisionOfferForm({ offer, onCancel, onSuccess }: RevisionOfferF
       return revisionOfferService.create({
         elevatorId: Number(data.elevatorId),
         currentAccountId: data.currentAccountId ? Number(data.currentAccountId) : undefined,
+        revisionStandardId: data.revisionStandardId ? Number(data.revisionStandardId) : undefined,
         parts: data.parts.map((p) => {
           const selectedPart = partsArray.find((part) => part.id === Number(p.partId))
           return {
@@ -158,6 +187,7 @@ export function RevisionOfferForm({ offer, onCancel, onSuccess }: RevisionOfferF
       return revisionOfferService.update(offer.id, {
         elevatorId: Number(data.elevatorId),
         currentAccountId: data.currentAccountId ? Number(data.currentAccountId) : undefined,
+        revisionStandardId: data.revisionStandardId ? Number(data.revisionStandardId) : undefined,
         parts: data.parts.map((p) => {
           const selectedPart = partsArray.find((part) => part.id === Number(p.partId))
           return {
@@ -303,29 +333,66 @@ export function RevisionOfferForm({ offer, onCancel, onSuccess }: RevisionOfferF
             </div>
           </div>
 
-          <div className="mt-4 space-y-2">
-            <Label htmlFor="currentAccountId">Cari Hesap *</Label>
-            <Select
-              value={formData.currentAccountId}
-              onValueChange={(value) => setFormData({ ...formData, currentAccountId: value })}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Cari hesap seçin" />
-              </SelectTrigger>
-              <SelectContent>
-                {currentAccounts.map((account) => (
-                  <SelectItem key={account.id} value={String(account.id)}>
-                    {account.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedElevator?.currentAccountName ? (
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="currentAccountId">Cari Hesap *</Label>
+              <Select
+                value={formData.currentAccountId}
+                onValueChange={(value) => setFormData({ ...formData, currentAccountId: value })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Cari hesap seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentAccountOptions.map((account) => (
+                    <SelectItem key={account.id} value={String(account.id)}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedElevator?.currentAccountName ? (
+                <p className="text-xs text-muted-foreground">
+                  Asansör için bağlı cari: {selectedElevator.currentAccountName}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="revisionStandardId">Revizyon Standardı</Label>
+              <Select
+                value={formData.revisionStandardId || 'NONE'}
+                onValueChange={(value) =>
+                  setFormData({
+                    ...formData,
+                    revisionStandardId: value === 'NONE' ? '' : value,
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Revizyon standardı seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">Standart seçilmedi</SelectItem>
+                  {revisionStandardOptions.map((standard) => (
+                    <SelectItem key={standard.id} value={String(standard.id)}>
+                      {standard.standardCode}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
-                Asansör için bağlı cari: {selectedElevator.currentAccountName}
+                Teklifin ana standardını seçin. Madde seçimi yine satır bazında yapılır.
               </p>
-            ) : null}
+            </div>
           </div>
+
+          {selectedRevisionStandardHeaderCode ? (
+            <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+              <div className="font-medium">Seçili Revizyon Standardı</div>
+              <div className="mt-1 text-muted-foreground">{selectedRevisionStandardHeaderCode}</div>
+            </div>
+          ) : null}
         </div>
 
         <div className="rounded-xl border bg-white p-6 shadow-sm">
