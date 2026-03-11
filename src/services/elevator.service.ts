@@ -67,9 +67,71 @@ export interface FacilityLookupOption {
   name: string
 }
 
+export interface ElevatorImportRowResult {
+  rowNumber?: number
+  elevatorName?: string
+  facilityName?: string
+  status?: string
+  message?: string
+}
+
+export interface ElevatorImportResult {
+  totalRows: number
+  successRows: number
+  failedRows: number
+  rows: ElevatorImportRowResult[]
+}
+
 // Backend'den gelen formatı frontend formatına çevir
 // YENİ BACKEND FIELD İSİMLERİ (eski field'lar KULLANILMIYOR):
 // identityNumber, buildingName, address, elevatorNumber, floorCount, capacity, speed, inspectionDate
+const toNumeric = (value: unknown): number | undefined => {
+  if (value == null) return undefined
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : undefined
+}
+
+const toStringValue = (value: unknown): string | undefined => {
+  if (value == null) return undefined
+  const normalized = String(value).trim()
+  return normalized.length > 0 ? normalized : undefined
+}
+
+function normalizeElevatorImportResult(raw: any): ElevatorImportResult {
+  const sourceRows = raw?.rows ?? raw?.results ?? raw?.rowErrors ?? raw?.errors ?? []
+  const rows: ElevatorImportRowResult[] = Array.isArray(sourceRows)
+    ? sourceRows.map((row: any) => ({
+        rowNumber: toNumeric(row?.rowNumber ?? row?.rowNum ?? row?.satirNo ?? row?.line ?? row?.index),
+        elevatorName: toStringValue(
+          row?.elevatorName ?? row?.asansorAdi ?? row?.elevator ?? row?.name,
+        ),
+        facilityName: toStringValue(
+          row?.facilityName ?? row?.tesisAdi ?? row?.buildingName ?? row?.bina,
+        ),
+        status: toStringValue(row?.status ?? row?.durum ?? row?.result),
+        message: toStringValue(
+          row?.message ?? row?.reason ?? row?.error ?? row?.hata ?? row?.description,
+        ),
+      }))
+    : []
+
+  const failedByRows = rows.filter((row) => {
+    const status = (row.status || '').toLocaleLowerCase('tr-TR')
+    return status === 'failed' || status === 'error' || status === 'hata' || status === 'başarısız'
+  }).length
+
+  const totalRows = toNumeric(raw?.totalRows ?? raw?.readRows ?? raw?.total) ?? rows.length
+  const successRows = toNumeric(raw?.successRows ?? raw?.successCount ?? raw?.success) ?? Math.max(0, totalRows - failedByRows)
+  const failedRows = toNumeric(raw?.failedRows ?? raw?.failedCount ?? raw?.failed) ?? failedByRows
+
+  return {
+    totalRows,
+    successRows,
+    failedRows,
+    rows,
+  }
+}
+
 function mapElevatorFromBackend(backend: any): Elevator {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -257,6 +319,22 @@ export const elevatorService = {
         name: String(item.name || ''),
       }))
       .filter((item) => Number.isFinite(item.id) && item.id > 0 && item.name.trim().length > 0)
+  },
+
+  importExcel: async (file: File): Promise<ElevatorImportResult> => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const { data } = await apiClient.post<ApiResponse<any>>('/elevators/import-excel', formData)
+    const payload = unwrapResponse(data, true) ?? data
+    return normalizeElevatorImportResult(payload)
+  },
+
+  downloadImportTemplate: async (): Promise<Blob> => {
+    const response = await apiClient.get('/elevators/import-template', {
+      responseType: 'blob',
+    })
+    return response.data
   },
 
   /**
