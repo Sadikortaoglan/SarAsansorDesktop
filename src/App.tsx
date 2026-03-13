@@ -228,7 +228,15 @@ function AppRoutes() {
         <Route
           path="users"
           element={
-            <ProtectedRoute requireAnyRole={['PLATFORM_ADMIN', 'TENANT_ADMIN']}>
+            <ProtectedRoute requireRole="TENANT_ADMIN">
+              <Navigate to="/tenant-admin/users" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="tenant-admin/users"
+          element={
+            <ProtectedRoute requireRole="TENANT_ADMIN">
               <UsersPage />
             </ProtectedRoute>
           }

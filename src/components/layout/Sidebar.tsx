@@ -235,7 +235,7 @@ const rawMenuItems: MenuItem[] = [
   },
   {
     title: 'Kullanıcılar',
-    href: '/users',
+    href: '/tenant-admin/users',
     icon: Users,
     roles: ['PATRON'] as const,
   },

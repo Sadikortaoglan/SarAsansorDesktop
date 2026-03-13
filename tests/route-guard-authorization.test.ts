@@ -21,5 +21,12 @@ test('scope-based path guard blocks cross-context access', () => {
   assert.equal(canScopeAccessPath('PLATFORM', '/dashboard'), false)
   assert.equal(canScopeAccessPath('PLATFORM', '/tenant-admin/users'), false)
   assert.equal(canScopeAccessPath('TENANT', '/dashboard'), true)
+  assert.equal(canScopeAccessPath('TENANT', '/tenant-admin/users'), true)
   assert.equal(canScopeAccessPath('TENANT', '/system-admin/tenants'), false)
+})
+
+test('tenant-admin user management route requires tenant admin role', () => {
+  assert.equal(hasScopedRole('TENANT_ADMIN', 'TENANT', 'TENANT_ADMIN'), true)
+  assert.equal(hasScopedRole('STAFF_USER', 'TENANT', 'TENANT_ADMIN'), false)
+  assert.equal(hasScopedRole('CARI_USER', 'TENANT', 'TENANT_ADMIN'), false)
 })

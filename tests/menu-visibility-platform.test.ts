@@ -10,6 +10,7 @@ type MenuVisibilityCase = {
 const menuCases: MenuVisibilityCase[] = [
   { title: 'Sistem Yönetimi', roles: ['PLATFORM_ADMIN'] },
   { title: 'Asansörler', roles: ['TENANT_ADMIN', 'STAFF_USER'] },
+  { title: 'Kullanıcılar', roles: ['TENANT_ADMIN'] },
   { title: 'Cari Bilgilerim', roles: ['CARI_USER'] },
 ]
 
@@ -32,4 +33,14 @@ test('tenant roles do not see platform-only menu section', () => {
   assert.equal(tenantVisible.includes('Sistem Yönetimi'), false)
   assert.equal(staffVisible.includes('Sistem Yönetimi'), false)
   assert.equal(cariVisible.includes('Sistem Yönetimi'), false)
+})
+
+test('tenant-admin user management menu is hidden for staff and cari roles', () => {
+  const tenantVisible = getVisibleMenus('TENANT_ADMIN', 'TENANT')
+  const staffVisible = getVisibleMenus('STAFF_USER', 'TENANT')
+  const cariVisible = getVisibleMenus('CARI_USER', 'TENANT')
+
+  assert.equal(tenantVisible.includes('Kullanıcılar'), true)
+  assert.equal(staffVisible.includes('Kullanıcılar'), false)
+  assert.equal(cariVisible.includes('Kullanıcılar'), false)
 })
