@@ -1,4 +1,5 @@
 import apiClient from '@/lib/api'
+import { resolveAuthApiBaseUrl } from '@/lib/api-base-url'
 import { unwrapResponse, type ApiResponse } from '@/lib/api-response'
 import { normalizeRole, type AppRole } from '@/lib/roles'
 
@@ -43,7 +44,9 @@ export interface RefreshTokenResponse {
 export const authService = {
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
     try {
+      const authBaseUrl = resolveAuthApiBaseUrl()
       const response = await apiClient.post<ApiResponse<LoginResponseData>>('/auth/login', credentials, {
+        baseURL: authBaseUrl,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -71,9 +74,11 @@ export const authService = {
   },
 
   refreshToken: async (refreshToken: string): Promise<RefreshTokenResponse> => {
+    const authBaseUrl = resolveAuthApiBaseUrl()
     const { data } = await apiClient.post<ApiResponse<RefreshTokenResponse>>(
       '/auth/refresh',
-      { refreshToken }
+      { refreshToken },
+      { baseURL: authBaseUrl }
     )
     return unwrapResponse(data)
   },
