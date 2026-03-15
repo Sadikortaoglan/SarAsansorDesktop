@@ -26,3 +26,9 @@ Kısa özet:
 
 - Local: frontend HTTPS, backend HTTP olabilir; Vite proxy kullanılır.
 - Production: frontend doğrudan gerçek HTTPS API adresine gitmelidir.
+
+Trial/demo akışı için ek not:
+
+- `POST /api/trial-request` ve polling sonrası gelen `response.data.loginUrl` frontend tarafından aynen kullanılmalıdır.
+- Frontend tenant domain üretmemelidir; `.asenovo.com` ve `.asenovo.local` ayrımını backend belirler.
+- Local backend testlerinde `loginUrl` `.asenovo.local` dönerse ilgili subdomain için hosts kaydı gerekebilir.
